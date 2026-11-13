@@ -1,33 +1,22 @@
 :root {
-  --bg-space: #07090e;
-  --bg-surface: #0d121c;
-  --bg-card: #121927;
-  --bg-card-hover: #182236;
-  --border-hud: rgba(255, 112, 67, 0.25);
-  --border-cyan: rgba(0, 240, 255, 0.3);
-  --border-subtle: rgba(255, 255, 255, 0.08);
+  /* Semantic Tokens per §2.1 */
+  --bg-base: #070B12;
+  --bg-panel: #0E1522;
+  --bg-elevated: #111A2B;
+  --border-subtle: #1E293B;
+  --border-active: #334155;
+  --text-primary: #E2E8F0;
+  --text-secondary: #94A3B8;
+  --text-muted: #475569;
+  --safe: #10B981;
+  --hazard: #EF4444;
+  --rover: #06B6D4;
+  --caution: #F59E0B;
+  --accent-info: #6366F1;
 
-  --mars-rust: #ff5722;
-  --mars-accent: #ff7043;
-  --mars-glow: rgba(255, 87, 34, 0.35);
-
-  --cyan-safe: #00f0ff;
-  --cyan-glow: rgba(0, 240, 255, 0.35);
-
-  --amber-caution: #ffb300;
-  --amber-glow: rgba(255, 179, 0, 0.3);
-
-  --red-hazard: #ff1744;
-  --red-glow: rgba(255, 23, 68, 0.35);
-
-  --text-primary: #f0f4f8;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
-  --text-accent: #ff8a65;
-
-  --font-display: 'Chakra Petch', sans-serif;
+  /* Typography per §2.2 */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
-  --font-body: 'Space Grotesk', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 * {
@@ -37,155 +26,145 @@
 }
 
 body {
-  background-color: var(--bg-space);
+  background-color: var(--bg-base);
   color: var(--text-primary);
-  font-family: var(--font-body);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   min-height: 100vh;
   overflow-x: hidden;
-  background-image: 
-    radial-gradient(ellipse at 10% 20%, rgba(255, 87, 34, 0.04) 0%, transparent 50%),
-    radial-gradient(ellipse at 90% 80%, rgba(0, 240, 255, 0.03) 0%, transparent 50%),
-    linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
-  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
 }
 
-/* Custom Scrollbar */
+/* Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: var(--bg-space);
+  background: var(--bg-base);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 112, 67, 0.3);
+  background: var(--border-active);
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--mars-rust);
+  background: var(--text-muted);
 }
 
-/* Typography Helpers */
-h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-display);
-  letter-spacing: 0.05em;
+/* Typography Classes */
+.section-header {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
   text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-title {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .mono {
   font-family: var(--font-mono);
 }
 
-/* Status Badges */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
-  border-radius: 4px;
-  font-size: 0.75rem;
+.kpi-number {
   font-family: var(--font-mono);
+  font-size: 24px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  color: var(--text-primary);
+  line-height: 1.1;
 }
 
-.badge-optimal {
-  background: rgba(0, 240, 255, 0.12);
-  color: var(--cyan-safe);
-  border: 1px solid var(--cyan-safe);
-  box-shadow: 0 0 8px var(--cyan-glow);
+.unit-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 
-.badge-caution {
-  background: rgba(255, 179, 0, 0.12);
-  color: var(--amber-caution);
-  border: 1px solid var(--amber-caution);
-  box-shadow: 0 0 8px var(--amber-glow);
-}
-
-.badge-gated {
-  background: rgba(255, 23, 68, 0.15);
-  color: var(--red-hazard);
-  border: 1px solid var(--red-hazard);
-  box-shadow: 0 0 8px var(--red-glow);
-}
-
-/* Scanline / HUD Overlay */
-.hud-panel {
-  background: var(--bg-card);
+/* Restrained Panels (No glow, no glassmorphism per §2.3) */
+.mc-panel {
+  background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
   border-radius: 8px;
-  padding: 1.25rem;
-  position: relative;
-  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
-  backdrop-filter: blur(12px);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  padding: 16px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  transition: border-color 150ms ease-out;
 }
 
-.hud-panel:hover {
-  border-color: rgba(255, 112, 67, 0.3);
+.mc-panel:hover {
+  border-color: var(--border-active);
 }
 
-.hud-panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1rem;
-  padding-bottom: 0.6rem;
-  border-bottom: 1px solid var(--border-subtle);
-}
-
-.hud-panel-title {
-  font-size: 0.95rem;
-  color: var(--mars-accent);
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-/* Tactical Buttons */
-.btn-tactical {
+/* Buttons */
+.mc-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  background: rgba(255, 87, 34, 0.15);
-  color: var(--mars-accent);
-  border: 1px solid var(--mars-rust);
+  gap: 6px;
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
-  padding: 0.5rem 1rem;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 0.85rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  padding: 6px 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
 }
 
-.btn-tactical:hover:not(:disabled) {
-  background: var(--mars-rust);
-  color: #fff;
-  box-shadow: 0 0 15px var(--mars-glow);
-  transform: translateY(-1px);
+.mc-btn:hover:not(:disabled) {
+  background: var(--border-active);
+  border-color: var(--text-secondary);
 }
 
-.btn-tactical:disabled {
-  opacity: 0.4;
+.mc-btn:disabled {
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
-.btn-cyan {
-  background: rgba(0, 240, 255, 0.12);
-  color: var(--cyan-safe);
-  border-color: var(--cyan-safe);
+.mc-btn-active {
+  background: var(--border-active);
+  border-color: var(--text-primary);
+  color: #FFFFFF;
 }
 
-.btn-cyan:hover:not(:disabled) {
-  background: var(--cyan-safe);
-  color: #050811;
-  box-shadow: 0 0 15px var(--cyan-glow);
+/* Pulsing Rover Animation per §2.6 */
+@keyframes rover-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.15);
+  }
+}
+
+.rover-pulsing {
+  animation: rover-pulse 2s ease-in-out infinite;
+}
+
+/* Status Blink Animation per §2.6 */
+@keyframes status-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.status-blinking {
+  animation: status-blink 1.2s ease-in-out infinite;
 }
