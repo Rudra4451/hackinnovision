@@ -15,7 +15,7 @@ from core.config import (
     BATTERY_CAPACITY_WH
 )
 from core.terrain import generate_terrain, classify_terrain, generate_cost_map
-from core.navigation import find_path, compare_routes, calculate_path_metrics
+from core.navigation import compare_routes
 from core.science import rank_targets, calculate_confidence
 from core.simulation import simulate_rover
 from utils.helpers import validate_navigation_payload
@@ -57,33 +57,41 @@ view_mode = st.sidebar.radio("Map Visualization Mode", ["2D Topography", "3D Sur
 start_coords = (int(start_r), int(start_c))
 goal_coords = (int(goal_r), int(goal_c))
 
-# 1. Terrain Perception
+# 1. Terrain Perception & Cost Map Generation
 elevation = generate_terrain(grid_size=grid_size, seed=terrain_seed)
 classified = classify_terrain(elevation, max_slope=max_slope)
 cost_map = generate_cost_map(elevation, max_slope=max_slope)
 
-# 2. Autonomous Navigation (Compare Routes)
-route_payload = compare_routes(cost_map, start=start_coords, goal=goal_coords)
+# 2. Define Start and Goal Positions from core.config (or sidebar coordinates)
+current_start = start_coords if (start_coords != START_POSITION) else START_POSITION
+current_goal = goal_coords if (goal_coords != GOAL_POSITION) else GOAL_POSITION
 
-# 3. Payload Validation & Crash Protection
-is_valid, error_message = validate_navigation_payload(route_payload)
+# 3. Call compare_routes from core.navigation
+res = compare_routes(cost_map, current_start, current_goal)
+
+# Defensive validation of navigation payload
+is_valid, error_msg = validate_navigation_payload(res)
 if not is_valid:
-    st.error(f"⚠️ Navigation Payload Validation Error: {error_message}")
+    st.error(f"Navigation Payload Schema Error: {error_msg}")
     st.stop()
 
-# Extract validated route paths
-path_safest = route_payload["safest"]["route"]["path"]
-path_shortest = route_payload["shortest"]["route"]["path"]
+# 4. Graceful Fallback: Check if safest route was found
+if not res["safest"]["route"]["success"]:
+    st.error(f"🚨 Navigation Failure: {res['safest']['route']['reason']}")
+    st.stop()
 
-# 4. Science Target Intelligence
-targets = rank_targets([], rover_pos=start_coords, cost_map=cost_map)
+# 5. Extract Paths and Pass `res` to UI Components
+path_safest = res["safest"]["route"]["path"]
+path_shortest = res["shortest"]["route"]["path"]
 
-# 5. Rover Dynamics Simulation
-active_path = path_safest if path_safest else path_shortest
-telemetry = simulate_rover(active_path, cost_map, initial_battery_wh=BATTERY_CAPACITY_WH)
+# Science Target Intelligence
+targets = rank_targets([], rover_pos=current_start, cost_map=cost_map)
+
+# Rover Dynamics Simulation along Safest Path
+telemetry = simulate_rover(path_safest, cost_map, initial_battery_wh=BATTERY_CAPACITY_WH)
 
 # Render Primary Telemetry Bar
-render_mission_panel(telemetry, route_payload)
+render_mission_panel(telemetry, res)
 
 st.write("")
 
@@ -114,8 +122,8 @@ with tab_nav:
 
     with c_left:
         st.markdown("#### ⚡ Shortest Route (Distance-Minimal)")
-        m_short = route_payload["shortest"]["metrics"]
-        r_short = route_payload["shortest"]["route"]
+        m_short = res["shortest"]["metrics"]
+        r_short = res["shortest"]["route"]
         st.write(f"- **Status:** `{'✅ FOUND' if r_short.get('success') else '❌ FAILED'}`")
         st.write(f"- **Distance:** `{m_short.get('total_distance', 0):.2f} m`")
         st.write(f"- **Total Cumulative Cost:** `{m_short.get('total_cost', 0):.2f}`")
@@ -123,16 +131,16 @@ with tab_nav:
 
     with c_right:
         st.markdown("#### 🛡️ Safest Route (Risk-Averse)")
-        m_safe = route_payload["safest"]["metrics"]
-        r_safe = route_payload["safest"]["route"]
+        m_safe = res["safest"]["metrics"]
+        r_safe = res["safest"]["route"]
         st.write(f"- **Status:** `{'✅ FOUND' if r_safe.get('success') else '❌ FAILED'}`")
         st.write(f"- **Distance:** `{m_safe.get('total_distance', 0):.2f} m`")
         st.write(f"- **Total Cumulative Cost:** `{m_safe.get('total_cost', 0):.2f}`")
         st.write(f"- **Caution Zone Steps:** `{m_safe.get('caution_steps', 0)}`")
 
     st.write("---")
-    st.info(f"**Tactical Recommendation:** {route_payload['summary'].get('recommendation', 'N/A')}")
-    st.json(route_payload)
+    st.info(f"**Tactical Recommendation:** {res['summary'].get('recommendation', 'N/A')}")
+    st.json(res)
 
 with tab_science:
     render_target_panel(targets)
@@ -150,7 +158,7 @@ with tab_contracts:
     | Subsystem | Owner | Primary Module | Exported Contract |
     |---|---|---|---|
     | **Terrain Intelligence** | Member 2 | `core/terrain.py` | `cost_map` (2D float: `1.0` Safe, `[5, 20]` Caution, `inf` Hazard) |
-    | **Autonomous Navigation** | Member 3 | `core/navigation.py` | 8-connected A* (`find_path`, `compare_routes`) with corner-cut protection |
+    | **Autonomous Navigation** | Member 3 | `core/navigation.py` | 8-connected A* (`compare_routes`) returning `res` with shortest & safest routes |
     | **Science Intelligence** | Member 4 | `core/science.py` | Shannon entropy uncertainty & accessibility-gated operational scoring |
     | **Payload Validator** | Lead Architect | `utils/helpers.py` | `validate_navigation_payload` (guarantees schema integrity) |
     | **Mission Simulation** | Lead Architect | `core/simulation.py` | Rover kinematics, energy draw, and sol time progression |
