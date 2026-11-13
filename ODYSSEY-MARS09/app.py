@@ -105,14 +105,16 @@ tab_map, tab_nav, tab_science, tab_contracts = st.tabs([
 
 with tab_map:
     map_fig = render_terrain_map(
-        elevation,
-        path_safest=path_safest,
-        path_shortest=path_shortest,
-        targets=targets,
-        view_mode=view_mode
+        cost_map=cost_map,
+        start=current_start,
+        goal=current_goal,
+        route_data=res,
+        targets=targets
     )
     if map_fig is not None:
         st.plotly_chart(map_fig, use_container_width=True)
+    else:
+        st.warning("Plotly required for interactive map rendering.")
     else:
         st.warning("Plotly required for interactive map rendering.")
 
