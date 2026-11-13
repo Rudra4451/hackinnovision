@@ -14,6 +14,7 @@ from backend.integrations.terrain_adapter import (
     deserialize_cost_map_from_json,
     extract_hazard_mask,
     get_default_terrain,
+    get_terrain_intelligence_data,
     sanitize_cost_map_for_json,
 )
 from backend.schemas import (
@@ -68,11 +69,18 @@ def plan_mission_waypoints(req: MissionWaypointRequest) -> Dict[str, Any]:
 
 
 @router.get("/terrain", response_model=TerrainResponse)
-def get_mission_terrain() -> Dict[str, Any]:
+def get_mission_terrain(source: str = "benchmark") -> Dict[str, Any]:
     """
     Retrieve sanitized terrain cost grid and topographical elevation.
+    Supports source='benchmark' (50x50 Jezero crater) or source='intelligence' (100x100 full terrain pipeline).
     """
-    cost_map, elevation = get_default_terrain()
+    if source == "intelligence":
+        ti_data = get_terrain_intelligence_data()
+        cost_map = ti_data["cost_map"]
+        elevation = ti_data["elevation"]
+    else:
+        cost_map, elevation = get_default_terrain()
+
     rows, cols = cost_map.shape
 
     hazard_mask = extract_hazard_mask(cost_map)

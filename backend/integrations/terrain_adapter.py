@@ -161,3 +161,19 @@ def get_default_terrain() -> Tuple[np.ndarray, np.ndarray]:
     if _CACHED_TERRAIN is None:
         _CACHED_TERRAIN = generate_benchmark_terrain(50, 50, seed=42)
     return _CACHED_TERRAIN
+
+
+def get_terrain_intelligence_data(seed: int = 42) -> Dict[str, Any]:
+    """Retrieve complete topographical intelligence from core.terrain."""
+    try:
+        from core.terrain import build_terrain_intelligence
+        return build_terrain_intelligence(seed=seed)
+    except ImportError:
+        cost_map, elevation = get_default_terrain()
+        return {
+            "cost_map": cost_map,
+            "elevation": elevation,
+            "slope": np.zeros_like(cost_map),
+            "obstacle_mask": np.isinf(cost_map),
+        }
+
