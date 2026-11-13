@@ -6,7 +6,10 @@ from typing import Any, Dict
 from fastapi import APIRouter, HTTPException
 import numpy as np
 
-from backend.integrations.navigation_adapter import run_route_comparison
+from backend.integrations.navigation_adapter import (
+    run_multi_waypoint_mission,
+    run_route_comparison,
+)
 from backend.integrations.terrain_adapter import (
     deserialize_cost_map_from_json,
     extract_hazard_mask,
@@ -14,6 +17,7 @@ from backend.integrations.terrain_adapter import (
     sanitize_cost_map_for_json,
 )
 from backend.schemas import (
+    MissionWaypointRequest,
     NavigationRequest,
     RouteComparisonResponse,
     TerrainMetadata,
@@ -42,6 +46,25 @@ def compare_navigation_routes(req: NavigationRequest) -> Dict[str, Any]:
         return result
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Navigation planning failed: {str(e)}")
+
+
+@router.post("/mission-waypoints")
+def plan_mission_waypoints(req: MissionWaypointRequest) -> Dict[str, Any]:
+    """
+    Execute continuous multi-stop waypoint mission route connecting all waypoints.
+    """
+    cost_map, _ = get_default_terrain()
+    try:
+        result = run_multi_waypoint_mission(
+            cost_map=cost_map,
+            start=req.start,
+            waypoints=req.waypoints,
+            mode=req.mode,
+        )
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Mission waypoint planning failed: {str(e)}")
+
 
 
 @router.get("/terrain", response_model=TerrainResponse)

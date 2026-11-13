@@ -1,4 +1,4 @@
-﻿# MARS-09 ODYSSEY: Science Intelligence & React Mission Control
+# MARS-09 ODYSSEY: Science Intelligence & React Mission Control
 **Track A: Planetary Reconnaissance & Autonomous Navigation**
 
 MARS-09 Odyssey is an autonomous planetary exploration system engineered for 12-hour reconnaissance hackathons. It integrates an 8-directional heuristic path planner (`core/navigation.py`) with a **Science Intelligence Engine** and a real-time **React Dark HUD Mission Control Dashboard**.

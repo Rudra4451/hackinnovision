@@ -48,6 +48,13 @@ class NavigationRequest(BaseModel):
     custom_cost_map: Optional[List[List[Optional[float]]]] = None
 
 
+class MissionWaypointRequest(BaseModel):
+    start: Tuple[int, int] = Field(default=(2, 2))
+    waypoints: List[Tuple[int, int]] = Field(..., description="Ordered list of waypoint tuples")
+    mode: str = Field(default="safest", description="'safest' or 'shortest'")
+
+
+
 class TerrainMetadata(BaseModel):
     rows: int
     cols: int

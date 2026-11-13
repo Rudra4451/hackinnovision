@@ -9,7 +9,10 @@ import numpy as np
 
 sys.path.insert(0, ".")
 
-from backend.integrations.navigation_adapter import run_route_comparison
+from backend.integrations.navigation_adapter import (
+    run_multi_waypoint_mission,
+    run_route_comparison,
+)
 from backend.integrations.terrain_adapter import (
     deserialize_cost_map_from_json,
     generate_benchmark_terrain,
@@ -148,6 +151,16 @@ class TestScienceIntelligenceEngine(unittest.TestCase):
         self.assertIn("MARS-09 ODYSSEY: TACTICAL RECONNAISSANCE REPORT", report)
         self.assertIn("PRIMARY TARGET", report)
         self.assertIn("RECONNAISSANCE TARGET MATRIX", report)
+
+    def test_multi_waypoint_mission_adapter(self):
+        """Verify integration of teammate's plan_mission_route."""
+        grid = np.ones((10, 10), dtype=float)
+        res = run_multi_waypoint_mission(grid, (0, 0), [(2, 2), (5, 5)], mode="safest")
+        self.assertTrue(res["success"])
+        self.assertEqual(res["path"][0], (0, 0))
+        self.assertEqual(res["path"][-1], (5, 5))
+        self.assertIn("metrics", res)
+
 
 
 if __name__ == "__main__":

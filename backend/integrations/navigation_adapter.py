@@ -5,11 +5,16 @@ Bridges the REST API and Science Intelligence Engine to core/navigation.py
 without modifying the existing navigation contract.
 """
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 # Strict import per Navigation Integration Contract
-from core.navigation import calculate_path_metrics, compare_routes, find_path
+from core.navigation import (
+    calculate_path_metrics,
+    compare_routes,
+    find_path,
+    plan_mission_route,
+)
 
 
 def run_route_comparison(
@@ -67,3 +72,18 @@ def check_target_accessibility(
         return False, res, f"Target is unreachable: {reason}"
 
     return True, res, "Reachable"
+
+
+def run_multi_waypoint_mission(
+    cost_map: np.ndarray,
+    start: Tuple[int, int],
+    waypoints: List[Tuple[int, int]],
+    mode: str = "safest",
+) -> Dict[str, Any]:
+    """
+    Execute continuous multi-stop waypoint mission route using plan_mission_route.
+    """
+    start_tuple = (int(start[0]), int(start[1]))
+    waypoints_tuples = [(int(r), int(c)) for r, c in waypoints]
+    return plan_mission_route(cost_map, start_tuple, waypoints_tuples, mode=mode)
+

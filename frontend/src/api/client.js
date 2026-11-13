@@ -24,6 +24,16 @@ export const compareRoutes = async (start, goal, customCostMap = null) => {
   return response.data;
 };
 
+export const planMissionWaypoints = async (start, waypoints, mode = 'safest') => {
+  const payload = {
+    start: [start[0], start[1]],
+    waypoints: waypoints.map((w) => [w[0], w[1]]),
+    mode,
+  };
+  const response = await api.post('/api/navigation/mission-waypoints', payload);
+  return response.data;
+};
+
 export const getScienceTargets = async (roverR = 2, roverC = 2) => {
   const response = await api.get('/api/science/targets', {
     params: { rover_r: roverR, rover_c: roverC },
