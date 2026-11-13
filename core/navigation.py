@@ -54,11 +54,71 @@ def _is_hazard(val: float) -> bool:
     return math.isinf(val) or val >= 1e9
 
 
+def smooth_trajectory(
+    path: List[Tuple[int, int]],
+    weight_data: float = 0.5,
+    weight_smooth: float = 0.1,
+    tolerance: float = 0.00001,
+    cost_map: Optional[np.ndarray] = None,
+) -> List[Tuple[float, float]]:
+    """
+    Smooth a discrete grid path using gradient descent while respecting fixed endpoints
+    and preventing drift into impassable terrain hazards.
+
+    Parameters:
+        path: Ordered list of (row, col) integer coordinates.
+        weight_data: Weight for retaining fidelity to original waypoint positions.
+        weight_smooth: Weight for smoothing curvature between neighbors.
+        tolerance: Convergence threshold for gradient descent updates.
+        cost_map: Optional 2D terrain cost map for hazard boundary validation.
+
+    Returns:
+        List of (row, col) floating-point coordinates representing the smoothed trajectory.
+    """
+    if len(path) <= 2:
+        return [(float(r), float(c)) for r, c in path]
+
+    # Initialize smoothed path with deep copy of original coordinates
+    new_path = [[float(r), float(c)] for r, c in path]
+    change = tolerance
+    max_iters = 500
+    iters = 0
+
+    while change >= tolerance and iters < max_iters:
+        change = 0.0
+        iters += 1
+        for i in range(1, len(path) - 1):
+            for dim in (0, 1):
+                orig_val = new_path[i][dim]
+                updated = (
+                    orig_val
+                    + weight_data * (float(path[i][dim]) - orig_val)
+                    + weight_smooth * (new_path[i - 1][dim] + new_path[i + 1][dim] - 2.0 * orig_val)
+                )
+
+                # Hazard clamping check: prevent drifting into np.inf cells
+                if cost_map is not None:
+                    check_r = int(round(updated if dim == 0 else new_path[i][0]))
+                    check_c = int(round(new_path[i][1] if dim == 0 else updated))
+                    rows, cols = cost_map.shape
+                    if 0 <= check_r < rows and 0 <= check_c < cols:
+                        if _is_hazard(cost_map[check_r, check_c]):
+                            updated = float(path[i][dim])
+                    else:
+                        updated = float(path[i][dim])
+
+                new_path[i][dim] = updated
+                change += abs(orig_val - updated)
+
+    return [(round(pt[0], 4), round(pt[1], 4)) for pt in new_path]
+
+
 def find_path(
     cost_map: np.ndarray,
     start: Tuple[int, int],
     goal: Tuple[int, int],
     mode: str = "safest",
+    turn_penalty: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Find an 8-directional path on the cost_map using the A* algorithm.
@@ -71,6 +131,7 @@ def find_path(
         goal: (row, col) coordinate of destination
         mode: "safest" (minimizes risk-weighted distance) or
               "shortest" (minimizes physical distance while avoiding np.inf)
+        turn_penalty: Optional kinematic energy penalty added when rover alters heading
 
     Returns:
         Structured dictionary conforming to the mission control schema:
@@ -81,6 +142,8 @@ def find_path(
                 "path": [(r0, c0), ...],
                 "x": [c0, ...],
                 "y": [r0, ...],
+                "smoothed_x": [c0_smooth, ...],
+                "smoothed_y": [r0_smooth, ...],
                 "nodes_explored": int,
                 "reason": "Path found"
             }
@@ -91,6 +154,8 @@ def find_path(
                 "path": [],
                 "x": [],
                 "y": [],
+                "smoothed_x": [],
+                "smoothed_y": [],
                 "nodes_explored": int,
                 "reason": str
             }
@@ -108,6 +173,8 @@ def find_path(
             "path": [],
             "x": [],
             "y": [],
+            "smoothed_x": [],
+            "smoothed_y": [],
             "nodes_explored": 0,
             "reason": f"Start position {start} is out of grid bounds ({rows}x{cols})",
         }
@@ -119,6 +186,8 @@ def find_path(
             "path": [],
             "x": [],
             "y": [],
+            "smoothed_x": [],
+            "smoothed_y": [],
             "nodes_explored": 0,
             "reason": f"Goal position {goal} is out of grid bounds ({rows}x{cols})",
         }
@@ -131,6 +200,8 @@ def find_path(
             "path": [],
             "x": [],
             "y": [],
+            "smoothed_x": [],
+            "smoothed_y": [],
             "nodes_explored": 0,
             "reason": f"Start position {start} is inside an impassable hazard zone",
         }
@@ -142,6 +213,8 @@ def find_path(
             "path": [],
             "x": [],
             "y": [],
+            "smoothed_x": [],
+            "smoothed_y": [],
             "nodes_explored": 0,
             "reason": f"Goal position {goal} is inside an impassable hazard zone",
         }
@@ -154,6 +227,8 @@ def find_path(
             "path": [start],
             "x": [start[1]],
             "y": [start[0]],
+            "smoothed_x": [float(start[1])],
+            "smoothed_y": [float(start[0])],
             "nodes_explored": 1,
             "reason": "Start and goal are identical",
         }
@@ -173,85 +248,174 @@ def find_path(
             return dist * min_finite_cost
         return dist
 
-    # A* Priority Queue: (f_score, h_score, tie_breaker, (row, col))
+    # A* Search
     tie_counter = 0
     start_h = heuristic(start[0], start[1])
-    open_heap: List[Tuple[float, float, int, Tuple[int, int]]] = [
-        (start_h, start_h, tie_counter, start)
-    ]
-    g_scores: Dict[Tuple[int, int], float] = {start: 0.0}
-    came_from: Dict[Tuple[int, int], Tuple[int, int]] = {}
-    closed_set = set()
-    nodes_explored = 0
 
-    while open_heap:
-        _, _, _, current = heapq.heappop(open_heap)
+    if turn_penalty > 0.0:
+        # Kinematic turn-aware A* search tracking rover heading (delta from previous step)
+        start_state = (start, None)
+        open_heap: List[Tuple[float, float, int, Tuple[Tuple[int, int], Optional[Tuple[int, int]]]]] = [
+            (start_h, start_h, tie_counter, start_state)
+        ]
+        g_scores: Dict[Tuple[Tuple[int, int], Optional[Tuple[int, int]]], float] = {start_state: 0.0}
+        came_from_state: Dict[
+            Tuple[Tuple[int, int], Optional[Tuple[int, int]]],
+            Tuple[Tuple[int, int], Optional[Tuple[int, int]]],
+        ] = {}
+        closed_set = set()
+        nodes_explored = 0
 
-        if current in closed_set:
-            continue
-        closed_set.add(current)
-        nodes_explored += 1
+        while open_heap:
+            _, _, _, current_state = heapq.heappop(open_heap)
 
-        if current == goal:
-            # Reconstruct path from start to goal
-            path: List[Tuple[int, int]] = [current]
-            curr_step = current
-            while curr_step in came_from:
-                curr_step = came_from[curr_step]
-                path.append(curr_step)
-            path.reverse()
-
-            return {
-                "success": True,
-                "mode": mode,
-                "path": path,
-                "x": [c for _, c in path],
-                "y": [r for r, _ in path],
-                "nodes_explored": nodes_explored,
-                "reason": "Path found",
-            }
-
-        cr, cc = current
-        current_g = g_scores[current]
-
-        for dr, dc, step_length in _NEIGHBORS:
-            nr, nc = cr + dr, cc + dc
-
-            # Boundary check
-            if not (0 <= nr < rows and 0 <= nc < cols):
+            if current_state in closed_set:
                 continue
+            closed_set.add(current_state)
+            nodes_explored += 1
 
-            # Direct destination impassable check
-            neighbor_cost = cost_map[nr, nc]
-            if _is_hazard(neighbor_cost):
-                continue
+            current_pos, current_heading = current_state
+            if current_pos == goal:
+                path: List[Tuple[int, int]] = [current_pos]
+                curr_s = current_state
+                while curr_s in came_from_state:
+                    curr_s = came_from_state[curr_s]
+                    path.append(curr_s[0])
+                path.reverse()
 
-            # Prevent diagonal corner-cutting and squeezing through pinch points
-            # A physical rover with finite chassis width cannot cut across obstacle corners
-            # or squeeze diagonally between two obstacles touching at a point.
-            if dr != 0 and dc != 0:
-                # The two adjacent orthogonal cells are (cr + dr, cc) and (cr, cc + dc)
-                ortho1_is_hazard = _is_hazard(cost_map[cr + dr, cc])
-                ortho2_is_hazard = _is_hazard(cost_map[cr, cc + dc])
-                if ortho1_is_hazard or ortho2_is_hazard:
+                smoothed = smooth_trajectory(path, cost_map=cost_map)
+                return {
+                    "success": True,
+                    "mode": mode,
+                    "path": path,
+                    "x": [c for _, c in path],
+                    "y": [r for r, _ in path],
+                    "smoothed_x": [pt[1] for pt in smoothed],
+                    "smoothed_y": [pt[0] for pt in smoothed],
+                    "nodes_explored": nodes_explored,
+                    "reason": "Path found",
+                }
+
+            cr, cc = current_pos
+            current_g = g_scores[current_state]
+
+            for dr, dc, step_length in _NEIGHBORS:
+                nr, nc = cr + dr, cc + dc
+
+                if not (0 <= nr < rows and 0 <= nc < cols):
                     continue
 
-            # Transition step cost calculation
-            if mode == "safest":
-                step_cost = step_length * float(neighbor_cost)
-            else:  # "shortest"
-                step_cost = step_length
+                neighbor_cost = cost_map[nr, nc]
+                if _is_hazard(neighbor_cost):
+                    continue
 
-            tentative_g = current_g + step_cost
-            neighbor = (nr, nc)
+                if dr != 0 and dc != 0:
+                    ortho1_is_hazard = _is_hazard(cost_map[cr + dr, cc])
+                    ortho2_is_hazard = _is_hazard(cost_map[cr, cc + dc])
+                    if ortho1_is_hazard or ortho2_is_hazard:
+                        continue
 
-            if neighbor not in g_scores or tentative_g < g_scores[neighbor]:
-                g_scores[neighbor] = tentative_g
-                came_from[neighbor] = current
-                h_val = heuristic(nr, nc)
-                f_val = tentative_g + h_val
-                tie_counter += 1
-                heapq.heappush(open_heap, (f_val, h_val, tie_counter, neighbor))
+                new_heading = (dr, dc)
+                turn_cost = (
+                    turn_penalty
+                    if (current_heading is not None and new_heading != current_heading)
+                    else 0.0
+                )
+
+                if mode == "safest":
+                    step_cost = step_length * float(neighbor_cost) + turn_cost
+                else:
+                    step_cost = step_length + turn_cost
+
+                tentative_g = current_g + step_cost
+                neighbor_state = ((nr, nc), new_heading)
+
+                if neighbor_state not in g_scores or tentative_g < g_scores[neighbor_state]:
+                    g_scores[neighbor_state] = tentative_g
+                    came_from_state[neighbor_state] = current_state
+                    h_val = heuristic(nr, nc)
+                    f_val = tentative_g + h_val
+                    tie_counter += 1
+                    heapq.heappush(open_heap, (f_val, h_val, tie_counter, neighbor_state))
+
+    else:
+        # Standard zero-overhead A*
+        open_heap_std: List[Tuple[float, float, int, Tuple[int, int]]] = [
+            (start_h, start_h, tie_counter, start)
+        ]
+        g_scores_std: Dict[Tuple[int, int], float] = {start: 0.0}
+        came_from_std: Dict[Tuple[int, int], Tuple[int, int]] = {}
+        closed_set_std = set()
+        nodes_explored = 0
+
+        while open_heap_std:
+            _, _, _, current = heapq.heappop(open_heap_std)
+
+            if current in closed_set_std:
+                continue
+            closed_set_std.add(current)
+            nodes_explored += 1
+
+            if current == goal:
+                # Reconstruct path from start to goal
+                path = [current]
+                curr_step = current
+                while curr_step in came_from_std:
+                    curr_step = came_from_std[curr_step]
+                    path.append(curr_step)
+                path.reverse()
+
+                smoothed = smooth_trajectory(path, cost_map=cost_map)
+                return {
+                    "success": True,
+                    "mode": mode,
+                    "path": path,
+                    "x": [c for _, c in path],
+                    "y": [r for r, _ in path],
+                    "smoothed_x": [pt[1] for pt in smoothed],
+                    "smoothed_y": [pt[0] for pt in smoothed],
+                    "nodes_explored": nodes_explored,
+                    "reason": "Path found",
+                }
+
+            cr, cc = current
+            current_g = g_scores_std[current]
+
+            for dr, dc, step_length in _NEIGHBORS:
+                nr, nc = cr + dr, cc + dc
+
+                # Boundary check
+                if not (0 <= nr < rows and 0 <= nc < cols):
+                    continue
+
+                # Direct destination impassable check
+                neighbor_cost = cost_map[nr, nc]
+                if _is_hazard(neighbor_cost):
+                    continue
+
+                # Prevent diagonal corner-cutting and squeezing through pinch points
+                if dr != 0 and dc != 0:
+                    ortho1_is_hazard = _is_hazard(cost_map[cr + dr, cc])
+                    ortho2_is_hazard = _is_hazard(cost_map[cr, cc + dc])
+                    if ortho1_is_hazard or ortho2_is_hazard:
+                        continue
+
+                # Transition step cost calculation
+                if mode == "safest":
+                    step_cost = step_length * float(neighbor_cost)
+                else:  # "shortest"
+                    step_cost = step_length
+
+                tentative_g = current_g + step_cost
+                neighbor = (nr, nc)
+
+                if neighbor not in g_scores_std or tentative_g < g_scores_std[neighbor]:
+                    g_scores_std[neighbor] = tentative_g
+                    came_from_std[neighbor] = current
+                    h_val = heuristic(nr, nc)
+                    f_val = tentative_g + h_val
+                    tie_counter += 1
+                    heapq.heappush(open_heap_std, (f_val, h_val, tie_counter, neighbor))
 
     # Open set exhausted without finding a traversable route
     return {
@@ -260,6 +424,8 @@ def find_path(
         "path": [],
         "x": [],
         "y": [],
+        "smoothed_x": [],
+        "smoothed_y": [],
         "nodes_explored": nodes_explored,
         "reason": "No traversable path exists",
     }
@@ -343,6 +509,7 @@ def compare_routes(
     cost_map: np.ndarray,
     start: Tuple[int, int],
     goal: Tuple[int, int],
+    turn_penalty: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Run pathfinding under both 'shortest' and 'safest' modes and synthesize
@@ -352,12 +519,13 @@ def compare_routes(
         cost_map: 2D float terrain cost grid
         start: (row, col) start coordinates
         goal: (row, col) goal coordinates
+        turn_penalty: Optional kinematic energy penalty applied for heading turns
 
     Returns:
         Structured comparison dictionary conforming to the mission brief.
     """
-    shortest_route = find_path(cost_map, start, goal, mode="shortest")
-    safest_route = find_path(cost_map, start, goal, mode="safest")
+    shortest_route = find_path(cost_map, start, goal, mode="shortest", turn_penalty=turn_penalty)
+    safest_route = find_path(cost_map, start, goal, mode="safest", turn_penalty=turn_penalty)
 
     shortest_metrics = calculate_path_metrics(shortest_route["path"], cost_map)
     safest_metrics = calculate_path_metrics(safest_route["path"], cost_map)
@@ -449,6 +617,7 @@ def plan_mission_route(
     start: Tuple[int, int],
     waypoints: List[Tuple[int, int]],
     mode: str = "safest",
+    turn_penalty: float = 0.0,
 ) -> Dict[str, Any]:
     """
     Plan a continuous multi-stop mission route connecting start through an ordered list of waypoints.
@@ -464,7 +633,7 @@ def plan_mission_route(
         or an immediate failure dictionary if any waypoint segment is unreachable.
     """
     if not waypoints:
-        initial_check = find_path(cost_map, start, start, mode=mode)
+        initial_check = find_path(cost_map, start, start, mode=mode, turn_penalty=turn_penalty)
         if not initial_check["success"]:
             return {
                 "success": False,
@@ -472,6 +641,8 @@ def plan_mission_route(
                 "path": [],
                 "x": [],
                 "y": [],
+                "smoothed_x": [],
+                "smoothed_y": [],
                 "metrics": calculate_path_metrics([], cost_map),
                 "reason": initial_check.get("reason", "Start position is invalid"),
             }
@@ -481,6 +652,8 @@ def plan_mission_route(
             "path": [start],
             "x": [start[1]],
             "y": [start[0]],
+            "smoothed_x": [float(start[1])],
+            "smoothed_y": [float(start[0])],
             "metrics": calculate_path_metrics([start], cost_map),
             "reason": "Mission route planned successfully",
         }
@@ -489,7 +662,7 @@ def plan_mission_route(
     current_pos = start
 
     for idx, wp in enumerate(waypoints):
-        segment_res = find_path(cost_map, current_pos, wp, mode=mode)
+        segment_res = find_path(cost_map, current_pos, wp, mode=mode, turn_penalty=turn_penalty)
         if not segment_res["success"]:
             return {
                 "success": False,
@@ -497,6 +670,8 @@ def plan_mission_route(
                 "path": [],
                 "x": [],
                 "y": [],
+                "smoothed_x": [],
+                "smoothed_y": [],
                 "metrics": calculate_path_metrics([], cost_map),
                 "reason": f"Waypoint {idx + 1} unreachable",
             }
@@ -511,6 +686,7 @@ def plan_mission_route(
         current_pos = wp
 
     combined_metrics = calculate_path_metrics(stitched_path, cost_map)
+    smoothed = smooth_trajectory(stitched_path, cost_map=cost_map)
 
     return {
         "success": True,
@@ -518,9 +694,53 @@ def plan_mission_route(
         "path": stitched_path,
         "x": [c for _, c in stitched_path],
         "y": [r for r, _ in stitched_path],
+        "smoothed_x": [pt[1] for pt in smoothed],
+        "smoothed_y": [pt[0] for pt in smoothed],
         "metrics": combined_metrics,
         "reason": "Mission route planned successfully",
     }
+
+
+def recalculate_on_dynamic_hazard(
+    cost_map: np.ndarray,
+    current_pos: Tuple[int, int],
+    goal: Tuple[int, int],
+    new_hazards: List[Tuple[int, int]],
+    mode: str = "safest",
+    turn_penalty: float = 0.0,
+) -> Dict[str, Any]:
+    """
+    Simulate real-time camera / vision perception (visionscore) detecting an uncharted
+    hazard mid-drive, dynamically updating the terrain cost map and planning an evasive reroute.
+
+    Parameters:
+        cost_map: Current 2D terrain cost map.
+        current_pos: Immediate (row, col) location of the rover when hazard was flagged.
+        goal: Target destination (row, col).
+        new_hazards: List of (row, col) coordinates identified as impassable obstacles.
+        mode: Path planning mode ('safest' or 'shortest').
+        turn_penalty: Kinematic turn penalty applied during replanning.
+
+    Returns:
+        Structured route dictionary from find_path, augmented with "reroute_required": True.
+    """
+    updated_map = np.copy(cost_map)
+    rows, cols = updated_map.shape
+
+    for r, c in new_hazards:
+        if 0 <= r < rows and 0 <= c < cols:
+            updated_map[r, c] = np.inf
+
+    route_res = find_path(
+        cost_map=updated_map,
+        start=current_pos,
+        goal=goal,
+        mode=mode,
+        turn_penalty=turn_penalty,
+    )
+    route_res["reroute_required"] = True
+    route_res["dynamic_hazards_count"] = len(new_hazards)
+    return route_res
 
 
 if __name__ == "__main__":

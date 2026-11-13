@@ -23,6 +23,8 @@ from core.navigation import (
     calculate_path_metrics,
     compare_routes,
     plan_mission_route,
+    smooth_trajectory,
+    recalculate_on_dynamic_hazard,
 )
 
 
@@ -281,6 +283,157 @@ class TestNavigationScenarios(unittest.TestCase):
         self.assertFalse(fail_res["success"])
         self.assertEqual(fail_res["reason"], "Waypoint 2 unreachable")
         self.assertEqual(fail_res["path"], [])
+
+    def test_kinematic_turn_penalties(self):
+        """
+        Verify that high turn_penalty penalizes heading changes, forcing A*
+        to prefer a straight path with fewer turns over a lower-cost zigzag path.
+        """
+        def count_turns(path):
+            if len(path) <= 2:
+                return 0
+            turns = 0
+            for i in range(1, len(path) - 1):
+                h1 = (path[i][0] - path[i - 1][0], path[i][1] - path[i - 1][1])
+                h2 = (path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1])
+                if h1 != h2:
+                    turns += 1
+            return turns
+
+        # 6x6 grid where a zigzag corridor has slightly lower terrain cost (1.0)
+        # while a straight-line detour has slightly higher terrain cost (1.2).
+        grid = np.full((6, 6), 5.0)
+        zigzag_cells = [(0, 0), (1, 0), (1, 1), (2, 1), (2, 2), (3, 2), (3, 3)]
+        for r, c in zigzag_cells:
+            grid[r, c] = 1.0
+
+        for r in range(4):
+            grid[r, 0] = 1.2
+        for c in range(4):
+            grid[3, c] = 1.2
+        grid[0, 0] = 1.0
+
+        # Block diagonal cuts across the zigzag steps to force discrete turns
+        grid[0, 1] = np.inf
+        grid[1, 2] = np.inf
+        grid[2, 3] = np.inf
+
+        # Without turn penalty: chooses zigzag path with lower terrain cost
+        res_no_penalty = find_path(grid, (0, 0), (3, 3), mode="safest", turn_penalty=0.0)
+        self.assertTrue(res_no_penalty["success"])
+        turns_no_penalty = count_turns(res_no_penalty["path"])
+
+        # With turn penalty = 3.0: chooses straight corridor (down col 0, across row 3) with exactly 1 turn
+        res_penalty = find_path(grid, (0, 0), (3, 3), mode="safest", turn_penalty=3.0)
+        self.assertTrue(res_penalty["success"])
+        turns_penalty = count_turns(res_penalty["path"])
+
+        self.assertGreater(
+            turns_no_penalty,
+            turns_penalty,
+            f"Expected turn penalty to reduce turns: {turns_no_penalty} vs {turns_penalty}",
+        )
+        self.assertEqual(turns_penalty, 1, "Straight corridor path should contain exactly 1 turn")
+        self.assertEqual(
+            res_penalty["path"],
+            [(0, 0), (1, 0), (2, 0), (3, 0), (3, 1), (3, 2), (3, 3)],
+        )
+
+    def test_smooth_trajectory_and_hazard_clamping(self):
+        """
+        Verify gradient descent path smoothing:
+        1. Smoothed coordinates slightly round sharp 90-degree corners.
+        2. Output dictionary contains float smoothed_x and smoothed_y lists matching path length.
+        3. Smoothed points clamp back to the safe grid center when bordering np.inf hazards.
+        """
+        # 1. Basic path smoothing
+        sharp_path = [(0, 0), (1, 0), (2, 0), (2, 1), (2, 2)]
+        smoothed = smooth_trajectory(sharp_path, weight_data=0.5, weight_smooth=0.1)
+
+        self.assertEqual(len(smoothed), len(sharp_path))
+        # Fixed endpoints
+        self.assertEqual(smoothed[0], (0.0, 0.0))
+        self.assertEqual(smoothed[-1], (2.0, 2.0))
+
+        # Intermediate points should have continuous float coordinates rounding the corner
+        self.assertNotEqual(smoothed[2], (2.0, 0.0))
+        self.assertIsInstance(smoothed[2][0], float)
+        self.assertIsInstance(smoothed[2][1], float)
+
+        # 2. find_path returns smoothed coordinates
+        grid = np.ones((8, 8), dtype=float)
+        res = find_path(grid, (0, 0), (4, 4), mode="safest")
+        self.assertTrue(res["success"])
+        self.assertIn("smoothed_x", res)
+        self.assertIn("smoothed_y", res)
+        self.assertEqual(len(res["smoothed_x"]), len(res["path"]))
+        self.assertEqual(len(res["smoothed_y"]), len(res["path"]))
+        self.assertIsInstance(res["smoothed_x"][0], float)
+
+        # 3. Hazard clamping test
+        # Create hazard immediately adjacent to corner (2, 0) at (2, -1) or (3, 0)
+        hazard_grid = np.ones((5, 5), dtype=float)
+        hazard_grid[1, 1] = np.inf
+        # Path going around corner near (1, 1)
+        path = [(0, 1), (0, 0), (1, 0)]
+        clamped_smoothed = smooth_trajectory(path, cost_map=hazard_grid)
+        self.assertEqual(clamped_smoothed[0], (0.0, 1.0))
+        self.assertEqual(clamped_smoothed[-1], (1.0, 0.0))
+
+    def test_recalculate_on_dynamic_hazard(self):
+        """
+        Verify real-time vision integration: uncharted boulder injected mid-drive
+        forces an evasive reroute around the new obstacle with reroute_required=True.
+        """
+        grid = np.ones((10, 10), dtype=float)
+        start = (0, 0)
+        goal = (0, 7)
+
+        # Initial clear path straight down row 0
+        initial_route = find_path(grid, start, goal, mode="safest")
+        self.assertTrue(initial_route["success"])
+        self.assertIn((0, 3), initial_route["path"])
+        self.assertIn((0, 4), initial_route["path"])
+
+        # Rover reaches (0, 2) when vision system flags boulders at (0, 3) and (0, 4)
+        current_pos = (0, 2)
+        new_hazards = [(0, 3), (0, 4)]
+
+        reroute = recalculate_on_dynamic_hazard(
+            cost_map=grid,
+            current_pos=current_pos,
+            goal=goal,
+            new_hazards=new_hazards,
+            mode="safest",
+        )
+
+        self.assertTrue(reroute["success"])
+        self.assertTrue(reroute.get("reroute_required"))
+        self.assertEqual(reroute["path"][0], current_pos)
+        self.assertEqual(reroute["path"][-1], goal)
+
+        # Ensure rerouted path strictly avoids newly detected hazard cells
+        for hazard in new_hazards:
+            self.assertNotIn(
+                hazard,
+                reroute["path"],
+                f"Rerouted path passed through injected hazard at {hazard}",
+            )
+
+        # Ensure original map was not mutated (function takes a copy)
+        self.assertEqual(grid[0, 3], 1.0, "Original cost map must not be modified in place")
+
+        # Failure case: newly injected hazards completely isolate the goal
+        boxed_goal_hazards = [(0, 6), (1, 7)]
+        grid[0, 8] = np.inf  # Out of bounds/wall
+        fail_reroute = recalculate_on_dynamic_hazard(
+            cost_map=grid,
+            current_pos=current_pos,
+            goal=goal,
+            new_hazards=[(0, 7)],  # Direct hit on goal
+        )
+        self.assertFalse(fail_reroute["success"])
+        self.assertTrue(fail_reroute["reroute_required"])
 
 
 if __name__ == "__main__":
