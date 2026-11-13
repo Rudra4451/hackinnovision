@@ -1,0 +1,218 @@
+.dashboard-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  padding: 1rem 1.5rem 2rem 1.5rem;
+  max-width: 1720px;
+  margin: 0 auto;
+  gap: 1.25rem;
+}
+
+/* Header & Telemetry HUD */
+.mission-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  background: linear-gradient(90deg, rgba(18, 25, 39, 0.95) 0%, rgba(13, 18, 28, 0.95) 100%);
+  border: 1px solid var(--border-hud);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 112, 67, 0.2);
+}
+
+.mission-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mission-logo {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #ff7043 30%, #d84315 70%, #bf360c 100%);
+  box-shadow: 0 0 15px var(--mars-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mission-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.1em;
+}
+
+.mission-subtitle {
+  font-size: 0.75rem;
+  color: var(--text-accent);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+.telemetry-strip {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.telemetry-item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.telemetry-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+}
+
+.telemetry-val {
+  font-size: 0.95rem;
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--cyan-safe);
+}
+
+/* Main Dashboard Grid */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 1200px) {
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.nav-canvas-container {
+  height: 520px;
+  width: 100%;
+  position: relative;
+  background: #05070b;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border-subtle);
+}
+
+/* Route Trade-off Banner */
+.route-tradeoff-banner {
+  margin-top: 1rem;
+  padding: 0.85rem 1.25rem;
+  background: rgba(0, 240, 255, 0.05);
+  border-left: 4px solid var(--cyan-safe);
+  border-radius: 4px;
+}
+
+.tradeoff-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.tradeoff-stat-box {
+  background: rgba(255, 255, 255, 0.03);
+  padding: 0.6rem;
+  border-radius: 4px;
+  text-align: center;
+  border: 1px solid var(--border-subtle);
+}
+
+.tradeoff-stat-box .stat-val {
+  font-size: 1.1rem;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.tradeoff-stat-box .stat-label {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-top: 0.2rem;
+}
+
+/* Science Targets Table */
+.targets-table-wrapper {
+  overflow-x: auto;
+  margin-top: 0.5rem;
+}
+
+.targets-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.targets-table th {
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.targets-table td {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  vertical-align: middle;
+}
+
+.targets-table tr:hover {
+  background: rgba(255, 112, 67, 0.08);
+  cursor: pointer;
+}
+
+.targets-table tr.selected-target {
+  background: rgba(0, 240, 255, 0.1);
+  border-left: 3px solid var(--cyan-safe);
+}
+
+/* Rover Simulation Controls */
+.simulation-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 6px;
+  border: 1px solid var(--border-subtle);
+  margin-top: 1rem;
+}
+
+.simulation-slider {
+  flex: 1;
+  accent-color: var(--cyan-safe);
+  cursor: pointer;
+}
+
+/* Target Details Spectral Card */
+.spectral-bar-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+  font-size: 0.8rem;
+  font-family: var(--font-mono);
+}
+
+.spectral-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+  width: 60%;
+}
+
+.spectral-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ff7043, #00f0ff);
+}

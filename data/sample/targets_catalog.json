@@ -1,0 +1,125 @@
+[
+  {
+    "id": "TGT-01",
+    "name": "Neretva Vallis Delta Clays",
+    "target_type": "HYDRATED_CLAYS",
+    "location": [12, 10],
+    "rarity_factor": 1.15,
+    "sensor_variance": 0.03,
+    "class_probabilities": {
+      "HYDRATED_CLAYS": 0.88,
+      "BASALTIC_BEDROCK": 0.08,
+      "SULFATE_EVAPORITES": 0.04
+    },
+    "spectral_signature": {
+      "signal_to_noise": 9.4,
+      "hydration_index": 0.92,
+      "mineral_diversity": 0.85
+    }
+  },
+  {
+    "id": "TGT-02",
+    "name": "Jezero Crater Rim Carbonates",
+    "target_type": "MARGINAL_CARBONATES",
+    "location": [28, 22],
+    "rarity_factor": 1.10,
+    "sensor_variance": 0.04,
+    "class_probabilities": {
+      "MARGINAL_CARBONATES": 0.84,
+      "IMPACT_MELT_BRECCIA": 0.10,
+      "BASALTIC_BEDROCK": 0.06
+    },
+    "spectral_signature": {
+      "signal_to_noise": 8.7,
+      "hydration_index": 0.78,
+      "mineral_diversity": 0.80
+    }
+  },
+  {
+    "id": "TGT-03",
+    "name": "Kodiak Butte Silica Hot-Spring",
+    "target_type": "HYDROTHERMAL_SILICA",
+    "location": [45, 45],
+    "rarity_factor": 1.20,
+    "sensor_variance": 0.05,
+    "class_probabilities": {
+      "HYDROTHERMAL_SILICA": 0.82,
+      "SULFATE_EVAPORITES": 0.12,
+      "BASALTIC_BEDROCK": 0.06
+    },
+    "spectral_signature": {
+      "signal_to_noise": 9.0,
+      "hydration_index": 0.88,
+      "mineral_diversity": 0.90
+    }
+  },
+  {
+    "id": "TGT-04",
+    "name": "Western Rim Impassable Fault (HAZARD)",
+    "target_type": "IMPACT_MELT_BRECCIA",
+    "location": [20, 13],
+    "rarity_factor": 1.05,
+    "sensor_variance": 0.02,
+    "class_probabilities": {
+      "IMPACT_MELT_BRECCIA": 0.90,
+      "BASALTIC_BEDROCK": 0.10
+    },
+    "spectral_signature": {
+      "signal_to_noise": 8.2,
+      "hydration_index": 0.35,
+      "mineral_diversity": 0.65
+    }
+  },
+  {
+    "id": "TGT-05",
+    "name": "Northern Escarpment Wall (HAZARD)",
+    "target_type": "BASALTIC_BEDROCK",
+    "location": [5, 22],
+    "rarity_factor": 0.95,
+    "sensor_variance": 0.02,
+    "class_probabilities": {
+      "BASALTIC_BEDROCK": 0.92,
+      "IMPACT_MELT_BRECCIA": 0.08
+    },
+    "spectral_signature": {
+      "signal_to_noise": 8.5,
+      "hydration_index": 0.20,
+      "mineral_diversity": 0.40
+    }
+  },
+  {
+    "id": "TGT-06",
+    "name": "Séítah Sub-Basalt Bedrock",
+    "target_type": "BASALTIC_BEDROCK",
+    "location": [8, 6],
+    "rarity_factor": 0.90,
+    "sensor_variance": 0.03,
+    "class_probabilities": {
+      "BASALTIC_BEDROCK": 0.85,
+      "AEOLIAN_DUNE_FIELD": 0.15
+    },
+    "spectral_signature": {
+      "signal_to_noise": 9.2,
+      "hydration_index": 0.25,
+      "mineral_diversity": 0.50
+    }
+  },
+  {
+    "id": "TGT-07",
+    "name": "Southern Dune Ripple Field (CAUTION)",
+    "target_type": "SULFATE_EVAPORITES",
+    "location": [42, 28],
+    "rarity_factor": 1.05,
+    "sensor_variance": 0.06,
+    "class_probabilities": {
+      "SULFATE_EVAPORITES": 0.78,
+      "AEOLIAN_DUNE_FIELD": 0.16,
+      "BASALTIC_BEDROCK": 0.06
+    },
+    "spectral_signature": {
+      "signal_to_noise": 7.8,
+      "hydration_index": 0.70,
+      "mineral_diversity": 0.60
+    }
+  }
+]
