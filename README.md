@@ -15,6 +15,7 @@
 
 The MARS-09 Odyssey platform integrates three core autonomous sub-systems:
 - **Member 2 — Terrain Intelligence (`terrain_intelligence/` & `core/terrain.py`):** 100x100 digital elevation models (DEM), central-difference slope and aspect analysis, Neyman-Scott spatial boulder clustering, 3-tier traversability classification, sensor epistemic uncertainty modeling, and traversability cost mapping.
+- **VisionScore Engine (`visionscore/`):** Visual Terrain Scoring & Explainability foundation with unified adapters for uploaded imagery and camera streams, multi-environment profiles (MARS, EARTH, SIMULATION), and replaceable terrain classification interface (`analyze_terrain`).
 - **Integration Contract (`core/costmap.py`):** Standardized 2D NumPy float cost mapping ensuring seamless handoff between terrain perception and path planning.
 - **Member 3 — Autonomous Navigation (`core/navigation.py`):** 8-directional heuristic A* search, diagonal corner-cutting prevention, dual-mode routing (`shortest` vs. `safest`), multi-stop waypoint mission planning, and path telemetry metrics.
 - **Science Intelligence & React Dark HUD (`backend/` & `frontend/`):** FastAPI backend and real-time React telemetry dashboard for mission control, spectroscopic target classification, and Shannon entropy estimation.
@@ -103,6 +104,13 @@ print(comparison["summary"]["recommendation"])
 │   ├── uncertainty_estimator.py       # Epistemic sensor range & shadow model
 │   └── visualizer.py                  # Matplotlib heatmaps & Plotly 3D HTML
 │
+├── visionscore/                       # VisionScore Visual Terrain Scoring
+│   ├── __init__.py                    # Unified adapters, analyzer, results
+│   ├── config.py                      # Environment profiles & terrain classes
+│   ├── image_input.py                 # Unified image input (upload, camera)
+│   ├── analyzer.py                    # PMTCS segmentation & classification
+│   └── results.py                     # VisualResults presentation container
+│
 ├── backend/                           # Science Intelligence & REST API
 │   ├── main.py                        # FastAPI entry point
 │   ├── schemas.py                     # Pydantic v2 schemas
@@ -126,6 +134,7 @@ print(comparison["summary"]["recommendation"])
 │   ├── test_terrain_classifier.py     # Classification partition tests
 │   ├── test_terrain_generator.py      # Terrain generation & seed tests
 │   ├── test_uncertainty_estimator.py  # Sensor uncertainty tests
+│   ├── test_visionscore_stage1.py     # VisionScore Stage 1 foundation tests
 │   └── test_visualizer.py             # Visualization artifact tests
 │
 ├── outputs/                           # Generated visualization artifacts
