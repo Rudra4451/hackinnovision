@@ -154,6 +154,7 @@ def render_terrain_map(
     rows, cols = grid.shape
     fig.update_layout(
         template="plotly_dark",
+        clickmode="event+select",
         title=dict(
             text="📡 SATELLITE RECONNAISSANCE: TERRAIN COST & AUTONOMOUS TRAJECTORY FEED",
             font=dict(size=14, color="#E0E0E0", family="Courier New")
