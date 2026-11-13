@@ -444,6 +444,85 @@ def compare_routes(
     }
 
 
+def plan_mission_route(
+    cost_map: np.ndarray,
+    start: Tuple[int, int],
+    waypoints: List[Tuple[int, int]],
+    mode: str = "safest",
+) -> Dict[str, Any]:
+    """
+    Plan a continuous multi-stop mission route connecting start through an ordered list of waypoints.
+
+    Parameters:
+        cost_map: 2D float terrain cost grid
+        start: Initial rover coordinates (row, col)
+        waypoints: Ordered list of (row, col) target stops
+        mode: "safest" or "shortest" path planning mode
+
+    Returns:
+        Structured dictionary with stitched path coordinates and combined telemetry metrics,
+        or an immediate failure dictionary if any waypoint segment is unreachable.
+    """
+    if not waypoints:
+        initial_check = find_path(cost_map, start, start, mode=mode)
+        if not initial_check["success"]:
+            return {
+                "success": False,
+                "mode": mode,
+                "path": [],
+                "x": [],
+                "y": [],
+                "metrics": calculate_path_metrics([], cost_map),
+                "reason": initial_check.get("reason", "Start position is invalid"),
+            }
+        return {
+            "success": True,
+            "mode": mode,
+            "path": [start],
+            "x": [start[1]],
+            "y": [start[0]],
+            "metrics": calculate_path_metrics([start], cost_map),
+            "reason": "Mission route planned successfully",
+        }
+
+    stitched_path: List[Tuple[int, int]] = []
+    current_pos = start
+
+    for idx, wp in enumerate(waypoints):
+        segment_res = find_path(cost_map, current_pos, wp, mode=mode)
+        if not segment_res["success"]:
+            return {
+                "success": False,
+                "mode": mode,
+                "path": [],
+                "x": [],
+                "y": [],
+                "metrics": calculate_path_metrics([], cost_map),
+                "reason": f"Waypoint {idx + 1} unreachable",
+            }
+
+        seg_path = segment_res["path"]
+        if idx == 0:
+            stitched_path.extend(seg_path)
+        else:
+            # Avoid duplicate overlapping waypoint coordinate at the transition
+            stitched_path.extend(seg_path[1:])
+
+        current_pos = wp
+
+    combined_metrics = calculate_path_metrics(stitched_path, cost_map)
+
+    return {
+        "success": True,
+        "mode": mode,
+        "path": stitched_path,
+        "x": [c for _, c in stitched_path],
+        "y": [r for r, _ in stitched_path],
+        "metrics": combined_metrics,
+        "reason": "Mission route planned successfully",
+    }
+
+
 if __name__ == "__main__":
     print("=" * 70)
     print("ODYSSEY — MARS-09 AUTONOMOUS NAVIGATION DEMO (20x20 Grid)")

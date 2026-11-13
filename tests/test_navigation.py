@@ -22,6 +22,7 @@ from core.navigation import (
     find_path,
     calculate_path_metrics,
     compare_routes,
+    plan_mission_route,
 )
 
 
@@ -238,6 +239,48 @@ class TestNavigationScenarios(unittest.TestCase):
         self.assertEqual(metrics["max_cell_cost"], 0.0)
         self.assertEqual(metrics["caution_steps"], 0)
         self.assertEqual(metrics["step_count"], 0)
+
+    def test_plan_mission_route_three_stops(self):
+        """Test multi-stop mission routing connecting start through 3 waypoints."""
+        grid = np.ones((10, 10), dtype=float)
+        start = (0, 0)
+        waypoints = [(0, 3), (3, 3), (3, 6)]
+
+        # 1. Success case: continuous 3-stop trajectory
+        res = plan_mission_route(grid, start, waypoints, mode="safest")
+        self.assertTrue(res["success"], "Mission route planning should succeed")
+        self.assertEqual(res["path"][0], start)
+        self.assertEqual(res["path"][-1], waypoints[-1])
+
+        # Verify all waypoints are in the stitched trajectory in sequence
+        wp_indices = [res["path"].index(wp) for wp in waypoints]
+        self.assertEqual(wp_indices, sorted(wp_indices), "Waypoints must be visited in order")
+
+        # Verify duplicate overlapping points at transitions were removed
+        for i in range(len(res["path"]) - 1):
+            self.assertNotEqual(
+                res["path"][i],
+                res["path"][i + 1],
+                f"Duplicate waypoint found at index {i}",
+            )
+
+        # Coordinate alignment checks
+        self.assertEqual(len(res["x"]), len(res["path"]))
+        self.assertEqual(len(res["y"]), len(res["path"]))
+        self.assertEqual(res["x"], [c for _, c in res["path"]])
+        self.assertEqual(res["y"], [r for r, _ in res["path"]])
+
+        # Telemetry metrics checks
+        metrics = res["metrics"]
+        self.assertGreater(metrics["total_distance"], 0.0)
+        self.assertEqual(metrics["step_count"], len(res["path"]) - 1)
+
+        # 2. Failure case: Waypoint 2 unreachable due to hazard
+        grid[3, 3] = np.inf
+        fail_res = plan_mission_route(grid, start, waypoints, mode="safest")
+        self.assertFalse(fail_res["success"])
+        self.assertEqual(fail_res["reason"], "Waypoint 2 unreachable")
+        self.assertEqual(fail_res["path"], [])
 
 
 if __name__ == "__main__":
