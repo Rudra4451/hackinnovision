@@ -22,7 +22,7 @@ from utils.helpers import validate_navigation_payload
 
 # UI Visual Component Imports
 from components.terrain_map import render_terrain_map
-from components.mission_panel import render_mission_panel, render_navigation_metrics
+from components.mission_panel import render_mission_panel, render_navigation_metrics, render_mission_log
 from components.target_panel import render_target_panel
 
 st.set_page_config(
@@ -33,8 +33,8 @@ st.set_page_config(
 )
 
 # Header
-st.title("🔴 MARS-09 ODYSSEY: Planetary Autonomy & Mission Control")
-st.caption("Track A: Planetary Reconnaissance & Autonomous Navigation — Lead Architect Interface")
+st.title("🔴 MARS-09 ODYSSEY: Autonomous Rover Mission Control")
+st.caption("Planetary Reconnaissance & Autonomous Navigation — Lead Architect Interface")
 
 # Sidebar Controls
 st.sidebar.header("🕹️ Mission Control Parameters")
@@ -52,8 +52,6 @@ c_g1, c_g2 = st.sidebar.columns(2)
 goal_r = c_g1.number_input("Goal Row", min_value=0, max_value=grid_size - 1, value=min(GOAL_POSITION[0], grid_size - 1))
 goal_c = c_g2.number_input("Goal Col", min_value=0, max_value=grid_size - 1, value=min(GOAL_POSITION[1], grid_size - 1))
 
-view_mode = st.sidebar.radio("Map Visualization Mode", ["2D Topography", "3D Surface"], index=0)
-
 start_coords = (int(start_r), int(start_c))
 goal_coords = (int(goal_r), int(goal_c))
 
@@ -62,7 +60,7 @@ elevation = generate_terrain(grid_size=grid_size, seed=terrain_seed)
 classified = classify_terrain(elevation, max_slope=max_slope)
 cost_map = generate_cost_map(elevation, max_slope=max_slope)
 
-# 2. Define Start and Goal Positions from core.config (or sidebar coordinates)
+# 2. Define Start and Goal Positions from core.config (with sidebar customization)
 current_start = start_coords if (start_coords != START_POSITION) else START_POSITION
 current_goal = goal_coords if (goal_coords != GOAL_POSITION) else GOAL_POSITION
 
@@ -75,12 +73,22 @@ if not is_valid:
     st.error(f"Navigation Payload Schema Error: {error_msg}")
     st.stop()
 
-# 4. Graceful Fallback: Check if safest route was found
-if not res["safest"]["route"]["success"]:
-    st.error(f"🚨 Navigation Failure: {res['safest']['route']['reason']}")
+# TASK 1: Edge Case Evaluation
+safest_success = res["safest"]["route"]["success"]
+both_reachable = res["summary"].get(
+    "both_reachable",
+    (safest_success and res["shortest"]["route"]["success"])
+)
+
+# TASK 1: If safest route fails, block map rendering of routes and display exact error reason
+if not safest_success:
+    st.error(res["safest"]["route"]["reason"])
+    # Render bare satellite terrain map without routes to display the blocking hazards
+    bare_map = render_terrain_map(cost_map, current_start, current_goal, route_data=None)
+    st.plotly_chart(bare_map, use_container_width=True)
     st.stop()
 
-# 5. Extract Paths and Pass `res` to UI Components
+# 4. Extract Paths and Pass `res` to UI Components
 path_safest = res["safest"]["route"]["path"]
 path_shortest = res["shortest"]["route"]["path"]
 
@@ -97,10 +105,10 @@ st.write("")
 
 # Tabs Interface
 tab_map, tab_nav, tab_science, tab_contracts = st.tabs([
-    "🗺️ Topographical Reconnaissance",
-    "🧭 Dual-Mode Route Analysis",
-    "🔬 Science Target Queue",
-    "📐 System Contracts & Architecture"
+    "🗺️ Satellite Reconnaissance Feed",
+    "🧭 Dual-Mode Route Telemetry",
+    "🔬 Science Target Operations",
+    "📐 System Architecture & Contracts"
 ])
 
 with tab_map:
@@ -117,9 +125,13 @@ with tab_map:
         st.warning("Plotly required for interactive map rendering.")
 
 with tab_nav:
+    # TASK 1 & TASK 2: Route comparison metrics and NASA mission terminal log
     render_navigation_metrics(res)
     st.write("---")
-    st.json(res)
+    render_mission_log(res)
+    st.write("---")
+    with st.expander("🔍 Raw Telemetry JSON Payload"):
+        st.json(res)
 
 with tab_science:
     render_target_panel(targets)

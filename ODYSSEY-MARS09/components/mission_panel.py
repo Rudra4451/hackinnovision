@@ -1,5 +1,5 @@
 """
-UI Component: Rover Telemetry, Power & Mission Status Dashboard
+UI Component: Rover Telemetry, Mission Control Metrics & Terminal Mission Log
 Lead Integration Architect — ODYSSEY MARS-09
 """
 
@@ -10,17 +10,29 @@ import streamlit as st
 def render_navigation_metrics(res: Dict[str, Any]):
     """
     Render NASA mission control style route comparison metrics.
+    Handles edge case where shortest path is obstructed by hazards.
 
     Parameters:
         res: Standardized dictionary returned by core.navigation.compare_routes.
     """
-    # 1. Visually Striking Tactical Recommendation Banner
     summary = res.get("summary", {})
-    recommendation = summary.get("recommendation", "Nominal trajectory calculated.")
+    safest_route = res.get("safest", {}).get("route", {})
+    shortest_route = res.get("shortest", {}).get("route", {})
+    safest_success = safest_route.get("success", False)
+    shortest_success = shortest_route.get("success", False)
 
+    # Evaluate both_reachable
+    both_reachable = summary.get("both_reachable", (safest_success and shortest_success))
+
+    # Phase 4 Edge Case 3: Shortest obstructed by hazards, forcing safest route
+    if not both_reachable and safest_success:
+        st.warning("The shortest direct path was obstructed by infinite-cost hazards, forcing the rover to use the safest route.")
+
+    # 1. Visually Striking Tactical Recommendation Banner
+    recommendation = summary.get("recommendation", "Nominal trajectory calculated.")
     if "safest" in recommendation.lower():
         st.success(f"🛰️ **TACTICAL NAVIGATION DIRECTIVE:** {recommendation}")
-    elif "abort" in recommendation.lower() or "failed" in recommendation.lower():
+    elif "abort" in recommendation.lower() or "failed" in recommendation.lower() or not safest_success:
         st.error(f"🚨 **MISSION ABORT DIRECTIVE:** {recommendation}")
     else:
         st.info(f"🛰️ **MISSION CONTROL ADVISORY:** {recommendation}")
@@ -32,13 +44,11 @@ def render_navigation_metrics(res: Dict[str, Any]):
 
     with col_safe:
         st.markdown("### 🛡️ Safest Route (Risk-Averse)")
-        safe_route = res.get("safest", {}).get("route", {})
         safe_metrics = res.get("safest", {}).get("metrics", {})
 
-        status_text = "🟢 TRAJECTORY NOMINAL" if safe_route.get("success") else "🔴 UNREACHABLE"
-        st.caption(f"Status: `{status_text}` | Algorithm: `8-Connected A* (Weighted)`")
+        status_text = "🟢 TRAJECTORY NOMINAL" if safest_success else "🔴 UNREACHABLE"
+        st.caption(f"Status: `{status_text}` | Algorithm: `8-Connected A* (Cost-Weighted)`")
 
-        # Metrics display
         st.metric(
             label="Distance",
             value=f"{safe_metrics.get('total_distance', 0.0):.2f} m",
@@ -57,26 +67,24 @@ def render_navigation_metrics(res: Dict[str, Any]):
 
     with col_short:
         st.markdown("### ⚡ Shortest Route (Distance-Minimal)")
-        short_route = res.get("shortest", {}).get("route", {})
         short_metrics = res.get("shortest", {}).get("metrics", {})
 
-        status_text = "🟢 TRAJECTORY NOMINAL" if short_route.get("success") else "🔴 UNREACHABLE"
-        st.caption(f"Status: `{status_text}` | Algorithm: `8-Connected A* (Unit Cost)`")
+        status_text = "🟢 TRAJECTORY NOMINAL" if shortest_success else "🔴 OBSTRUCTED BY HAZARD"
+        st.caption(f"Status: `{status_text}` | Algorithm: `8-Connected A* (Unit Distance)`")
 
-        # Metrics display
         st.metric(
             label="Distance",
-            value=f"{short_metrics.get('total_distance', 0.0):.2f} m",
+            value=f"{short_metrics.get('total_distance', 0.0):.2f} m" if shortest_success else "N/A",
             help="Direct physical path distance ignoring slope risk"
         )
         st.metric(
             label="Movement Cost",
-            value=f"{short_metrics.get('total_cost', 0.0):.2f}",
+            value=f"{short_metrics.get('total_cost', 0.0):.2f}" if shortest_success else "INF",
             help="Integrated movement cost without hazard diversion"
         )
         st.metric(
             label="Caution Steps",
-            value=f"{short_metrics.get('caution_steps', 0)} cells",
+            value=f"{short_metrics.get('caution_steps', 0)} cells" if shortest_success else "N/A",
             help="Number of waypoints intersecting high-slope caution zones"
         )
 
@@ -91,7 +99,7 @@ def render_navigation_metrics(res: Dict[str, Any]):
     c_sum1.metric(
         label="Distance Detour Penalty",
         value=f"{dist_penalty:.1f}%",
-        delta=f"+{dist_penalty:.1f}% vs Shortest",
+        delta=f"+{dist_penalty:.1f}% vs Shortest" if shortest_success else "Forced Safe Route",
         delta_color="inverse",
         help="Extra ground distance required to avoid terrain rollover risks"
     )
@@ -101,6 +109,62 @@ def render_navigation_metrics(res: Dict[str, Any]):
         delta=f"-{caution_avoided} caution cells" if caution_avoided > 0 else "0",
         delta_color="normal",
         help="High-slope cells successfully avoided to preserve rover chassis integrity"
+    )
+
+
+def render_mission_log(res: Dict[str, Any]):
+    """
+    Simulate a NASA mission control telemetry terminal log.
+    Outputs dynamic log events styled with a black background and green monospace text.
+
+    Parameters:
+        res: Navigation payload from core.navigation.compare_routes.
+    """
+    summary = res.get("summary", {})
+    safest_metrics = res.get("safest", {}).get("metrics", {})
+    shortest_metrics = res.get("shortest", {}).get("metrics", {})
+    safest_route = res.get("safest", {}).get("route", {})
+    shortest_route = res.get("shortest", {}).get("route", {})
+
+    both_reachable = summary.get("both_reachable", (
+        safest_route.get("success", False) and shortest_route.get("success", False)
+    ))
+
+    # Dynamic log events incorporating Member 3 telemetry
+    log_lines = [
+        "[SYSTEM] Telemetry link: ACTIVE | Ground Station: Goldstone DSN (Sol 342)",
+        "[SYSTEM] Digital Elevation Model ingested: 100x100 matrix resolution 1.0 m/cell",
+        "[SYSTEM] A* Pathfinding complete.",
+        f"[METRIC] Safest Traversal Distance : {safest_metrics.get('total_distance', 0.0):.2f} m",
+        f"[METRIC] Shortest Baseline Distance: {shortest_metrics.get('total_distance', 0.0):.2f} m" if shortest_route.get("success") else "[METRIC] Shortest Baseline Distance: OBSTRUCTED (INF COST HAZARD)",
+        f"[METRIC] Distance penalty accepted: {summary.get('distance_penalty_pct', 0.0)}%",
+        f"[METRIC] Caution steps avoided: {summary.get('caution_steps_avoided', 0)}",
+        f"[METRIC] Total cost reduction: {summary.get('cost_reduction_pct', 0.0)}%",
+        f"[STATUS] Dual-mode reachability: {'BOTH REACHABLE' if both_reachable else 'SAFEST ONLY (SHORTEST PATH OBSTRUCTED)'}",
+        f"[DECISION] {summary.get('recommendation', 'Nominal trajectory armed.')}",
+        "[SYSTEM] Autopilot sequence armed. Telemetry stream nominal."
+    ]
+
+    log_content = "\n".join(log_lines)
+
+    st.markdown("#### 📟 NASA Telemetry Console & Mission Log")
+    st.markdown(
+        f"""
+        <div style="
+            background-color: #000000;
+            color: #00FF66;
+            font-family: 'Courier New', Courier, monospace;
+            padding: 20px;
+            border-radius: 6px;
+            border: 1px solid #1a3a2a;
+            box-shadow: inset 0 0 15px rgba(0, 255, 102, 0.12), 0 4px 6px rgba(0, 0, 0, 0.4);
+            font-size: 13.5px;
+            line-height: 1.65;
+            white-space: pre-wrap;
+            letter-spacing: 0.5px;
+        ">{log_content}</div>
+        """,
+        unsafe_allow_html=True
     )
 
 
