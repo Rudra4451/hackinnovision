@@ -1,6 +1,6 @@
 """
 ODYSSEY MARS-09: Streamlit Rover Mission Control Application
-Autonomous Mars Rover Simulation — Lead Architect Unified Interface
+Autonomous Mars Rover Simulation — Lead Architect Interface
 """
 
 import streamlit as st
@@ -18,6 +18,7 @@ from core.terrain import generate_terrain, classify_terrain, generate_cost_map
 from core.navigation import find_path, compare_routes, calculate_path_metrics
 from core.science import rank_targets, calculate_confidence
 from core.simulation import simulate_rover
+from utils.helpers import validate_navigation_payload
 
 # UI Visual Component Imports
 from components.terrain_map import render_terrain_map
@@ -56,42 +57,37 @@ view_mode = st.sidebar.radio("Map Visualization Mode", ["2D Topography", "3D Sur
 start_coords = (int(start_r), int(start_c))
 goal_coords = (int(goal_r), int(goal_c))
 
+# 1. Terrain Perception
+elevation = generate_terrain(grid_size=grid_size, seed=terrain_seed)
+classified = classify_terrain(elevation, max_slope=max_slope)
+cost_map = generate_cost_map(elevation, max_slope=max_slope)
 
-# Compute Pipeline (Cached)
-@st.cache_data
-def run_autonomy_pipeline(size: int, seed: int, slope_limit: float, start: tuple, goal: tuple):
-    # 1. Terrain Perception
-    elevation = generate_terrain(grid_size=size, seed=seed)
-    classified = classify_terrain(elevation, max_slope=slope_limit)
-    cost_map = generate_cost_map(elevation, max_slope=slope_limit)
+# 2. Autonomous Navigation (Compare Routes)
+route_payload = compare_routes(cost_map, start=start_coords, goal=goal_coords)
 
-    # 2. Autonomous Navigation (Dual-Mode A*)
-    path_safest = find_path(cost_map, start=start, goal=goal, mode="safest")
-    path_shortest = find_path(cost_map, start=start, goal=goal, mode="shortest")
+# 3. Payload Validation & Crash Protection
+is_valid, error_message = validate_navigation_payload(route_payload)
+if not is_valid:
+    st.error(f"⚠️ Navigation Payload Validation Error: {error_message}")
+    st.stop()
 
-    # 3. Route Comparison
-    routes_dict = compare_routes(cost_map, [path_shortest, path_safest], ["Shortest Route", "Safest Route"])
+# Extract validated route paths
+path_safest = route_payload["safest"]["route"]["path"]
+path_shortest = route_payload["shortest"]["route"]["path"]
 
-    # 4. Science Target Intelligence
-    targets = rank_targets([], rover_pos=start, cost_map=cost_map)
+# 4. Science Target Intelligence
+targets = rank_targets([], rover_pos=start_coords, cost_map=cost_map)
 
-    # 5. Rover Dynamics Simulation (Follows Safest Path by default)
-    active_path = path_safest if path_safest else path_shortest
-    telemetry = simulate_rover(active_path, cost_map, initial_battery_wh=BATTERY_CAPACITY_WH)
+# 5. Rover Dynamics Simulation
+active_path = path_safest if path_safest else path_shortest
+telemetry = simulate_rover(active_path, cost_map, initial_battery_wh=BATTERY_CAPACITY_WH)
 
-    return elevation, classified, cost_map, path_safest, path_shortest, routes_dict, targets, telemetry
-
-
-elevation, classified, cost_map, path_safest, path_shortest, routes_dict, targets, telemetry = run_autonomy_pipeline(
-    grid_size, terrain_seed, max_slope, start_coords, goal_coords
-)
-
-# 1. Real-Time Telemetry Bar
-render_mission_panel(telemetry, routes_dict)
+# Render Primary Telemetry Bar
+render_mission_panel(telemetry, route_payload)
 
 st.write("")
 
-# 2. Tabs Interface
+# Tabs Interface
 tab_map, tab_nav, tab_science, tab_contracts = st.tabs([
     "🗺️ Topographical Reconnaissance",
     "🧭 Dual-Mode Route Analysis",
@@ -118,22 +114,25 @@ with tab_nav:
 
     with c_left:
         st.markdown("#### ⚡ Shortest Route (Distance-Minimal)")
-        m_short = routes_dict.get("Shortest Route", {})
-        st.write(f"- **Distance:** `{m_short.get('distance_m', 0):.2f} m`")
-        st.write(f"- **Total Cumulative Cost:** `{m_short.get('estimated_cost', 0):.2f}`")
+        m_short = route_payload["shortest"]["metrics"]
+        r_short = route_payload["shortest"]["route"]
+        st.write(f"- **Status:** `{'✅ FOUND' if r_short.get('success') else '❌ FAILED'}`")
+        st.write(f"- **Distance:** `{m_short.get('total_distance', 0):.2f} m`")
+        st.write(f"- **Total Cumulative Cost:** `{m_short.get('total_cost', 0):.2f}`")
         st.write(f"- **Caution Zone Steps:** `{m_short.get('caution_steps', 0)}`")
-        st.write(f"- **Feasibility:** `{'✅ FEASIBLE' if m_short.get('feasible') else '❌ BLOCKED'}`")
 
     with c_right:
         st.markdown("#### 🛡️ Safest Route (Risk-Averse)")
-        m_safe = routes_dict.get("Safest Route", {})
-        st.write(f"- **Distance:** `{m_safe.get('distance_m', 0):.2f} m`")
-        st.write(f"- **Total Cumulative Cost:** `{m_safe.get('estimated_cost', 0):.2f}`")
+        m_safe = route_payload["safest"]["metrics"]
+        r_safe = route_payload["safest"]["route"]
+        st.write(f"- **Status:** `{'✅ FOUND' if r_safe.get('success') else '❌ FAILED'}`")
+        st.write(f"- **Distance:** `{m_safe.get('total_distance', 0):.2f} m`")
+        st.write(f"- **Total Cumulative Cost:** `{m_safe.get('total_cost', 0):.2f}`")
         st.write(f"- **Caution Zone Steps:** `{m_safe.get('caution_steps', 0)}`")
-        st.write(f"- **Feasibility:** `{'✅ FEASIBLE' if m_safe.get('feasible') else '❌ BLOCKED'}`")
 
     st.write("---")
-    st.json(routes_dict)
+    st.info(f"**Tactical Recommendation:** {route_payload['summary'].get('recommendation', 'N/A')}")
+    st.json(route_payload)
 
 with tab_science:
     render_target_panel(targets)
@@ -153,5 +152,6 @@ with tab_contracts:
     | **Terrain Intelligence** | Member 2 | `core/terrain.py` | `cost_map` (2D float: `1.0` Safe, `[5, 20]` Caution, `inf` Hazard) |
     | **Autonomous Navigation** | Member 3 | `core/navigation.py` | 8-connected A* (`find_path`, `compare_routes`) with corner-cut protection |
     | **Science Intelligence** | Member 4 | `core/science.py` | Shannon entropy uncertainty & accessibility-gated operational scoring |
+    | **Payload Validator** | Lead Architect | `utils/helpers.py` | `validate_navigation_payload` (guarantees schema integrity) |
     | **Mission Simulation** | Lead Architect | `core/simulation.py` | Rover kinematics, energy draw, and sol time progression |
     """)

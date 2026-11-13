@@ -4,8 +4,17 @@ Lead Integration Architect — MARS-09 ODYSSEY
 Validates Member 3 core.navigation contract with mock 10x10 cost map.
 """
 
-import numpy as np
-import pytest
+import unittest
+try:
+    import numpy as np
+    import pytest
+except ImportError:
+    np = None
+    pytest = None
+
+if np is None or pytest is None:
+    raise unittest.SkipTest("NumPy and Pytest required for integration tests")
+
 from core.navigation import compare_routes
 
 

@@ -24,8 +24,9 @@ class TestNavigation(unittest.TestCase):
         elev = generate_terrain(grid_size=20)
         cost = generate_cost_map(elev)
         res = compare_routes(cost, (0, 0), (19, 19))
-        self.assertIn("Shortest Route", res)
-        self.assertIn("Safest Route", res)
+        self.assertIn("shortest", res)
+        self.assertIn("safest", res)
+        self.assertIn("summary", res)
 
 
 if __name__ == "__main__":

@@ -15,10 +15,10 @@ from core.config import START_POSITION, GOAL_POSITION, OBSTACLE_COST
 
 _SQRT2 = math.sqrt(2.0)
 _NEIGHBORS = [
-    (-1, 0, 1.0),     # North
-    (1, 0, 1.0),      # South
-    (0, -1, 1.0),     # West
-    (0, 1, 1.0),      # East
+    (-1, 0, 1.0),      # North
+    (1, 0, 1.0),       # South
+    (0, -1, 1.0),      # West
+    (0, 1, 1.0),       # East
     (-1, -1, _SQRT2),  # Northwest
     (-1, 1, _SQRT2),   # Northeast
     (1, -1, _SQRT2),   # Southwest
@@ -64,7 +64,6 @@ def find_path(
         return []
 
     def heuristic(pos: Tuple[int, int]) -> float:
-        # Admissible Euclidean distance
         return math.hypot(pos[0] - goal[0], pos[1] - goal[1])
 
     open_set: List[Tuple[float, float, int, Tuple[int, int]]] = []
@@ -159,39 +158,58 @@ def calculate_path_metrics(path: List[Tuple[int, int]], cost_map: Any) -> Dict[s
 
 def compare_routes(
     cost_map: Any,
-    routes_or_start: Any = None,
-    names_or_goal: Any = None,
-    *args,
-    **kwargs
+    start: Tuple[int, int] = START_POSITION,
+    goal: Tuple[int, int] = GOAL_POSITION,
 ) -> Dict[str, Any]:
     """
     Evaluate and compare candidate routes across key mission metrics.
-    Supports both:
-      compare_routes(cost_map, start=(r, c), goal=(r, c))
-      compare_routes(cost_map, [path1, path2], ["RouteA", "RouteB"])
+    Conforms to the exact MARS-09 Member 3 navigation contract schema.
     """
-    if isinstance(routes_or_start, tuple) and isinstance(names_or_goal, tuple):
-        start, goal = routes_or_start, names_or_goal
-        shortest_path = find_path(cost_map, start, goal, mode="shortest")
-        safest_path = find_path(cost_map, start, goal, mode="safest")
-        routes = [shortest_path, safest_path]
-        route_names = ["Shortest Route", "Safest Route"]
-    elif isinstance(routes_or_start, list):
-        routes = routes_or_start
-        route_names = names_or_goal if names_or_goal is not None else [f"Route_{i+1}" for i in range(len(routes))]
+    shortest_path = find_path(cost_map, start, goal, mode="shortest")
+    safest_path = find_path(cost_map, start, goal, mode="safest")
+
+    shortest_metrics = calculate_path_metrics(shortest_path, cost_map)
+    safest_metrics = calculate_path_metrics(safest_path, cost_map)
+
+    shortest_success = len(shortest_path) > 0
+    safest_success = len(safest_path) > 0
+
+    s_dist = shortest_metrics["total_distance"]
+    safe_dist = safest_metrics["total_distance"]
+    dist_penalty = round(((safe_dist - s_dist) / s_dist * 100.0), 2) if (s_dist > 0 and safest_success) else 0.0
+
+    if safest_success:
+        recommendation = "Safest route recommended: minimizes terrain slope & hazard exposure."
+    elif shortest_success:
+        recommendation = "Safest route blocked; shortest route available with elevated risk."
     else:
-        routes = []
-        route_names = []
+        recommendation = "Mission Abort: Destination unreachable by planners due to terrain hazards."
 
-    comparison: Dict[str, Any] = {}
-    for name, path in zip(route_names, routes):
-        metrics = calculate_path_metrics(path, cost_map)
-        comparison[name] = {
-            "num_waypoints": len(path),
-            "estimated_cost": metrics["total_cost"],
-            "distance_m": metrics["total_distance"],
-            "caution_steps": metrics["caution_steps"],
-            "feasible": metrics["feasible"] and len(path) > 0,
-        }
-
-    return comparison
+    return {
+        "shortest": {
+            "route": {
+                "success": shortest_success,
+                "mode": "shortest",
+                "path": shortest_path,
+                "x": [c for _, c in shortest_path],
+                "y": [r for r, _ in shortest_path],
+                "reason": "Path found" if shortest_success else "Goal unreachable due to surrounding hazards or boundaries",
+            },
+            "metrics": shortest_metrics,
+        },
+        "safest": {
+            "route": {
+                "success": safest_success,
+                "mode": "safest",
+                "path": safest_path,
+                "x": [c for _, c in safest_path],
+                "y": [r for r, _ in safest_path],
+                "reason": "Path found" if safest_success else "Goal unreachable due to surrounding hazards or boundaries",
+            },
+            "metrics": safest_metrics,
+        },
+        "summary": {
+            "distance_penalty_pct": dist_penalty,
+            "recommendation": recommendation,
+        },
+    }
