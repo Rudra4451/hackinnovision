@@ -162,3 +162,33 @@ print(comparison["summary"]["recommendation"])
    ```bash
    python main.py
    ```
+
+---
+
+## 5. 3D Terrain Visualization & Mission Control Telemetry
+
+The MARS-09 Odyssey platform features a mission-control-grade 3D interface built with React, Vite, and Plotly.js conforming to NASA/JPL telemetry specifications.
+
+### Key Capabilities
+- **Real Martian Topography (DEM):** Renders elevation relief with custom geological colormaps, contour lines, and dynamic vertical exaggeration ($0.5\times$ to $3.0\times$).
+- **Dual-Mode Trajectory Overlays:** Displays completed traversal (solid `#10B981`) and remaining path (dotted `#10B981`).
+- **Hazard & Caution Classification:** Real-time visual markers distinguishing impassable obstacles (`np.inf` / `"Infinity"` $\rightarrow$ crimson diamonds `#EF4444`) and caution zones (cost $> 2.0$ $\rightarrow$ amber circles `#F59E0B`).
+- **Rover Simulation Engine:** Leak-free React state machine supporting Play, Pause, Step ($\pm 1$), Reset, speed selection ($0.5\times$ to $4\times$), and position scrubbing.
+- **Route Comparison Drawer:** Collapsible side-by-side metric comparison table contrasting Safest vs. Shortest routes with semantic delta coloring and quoted navigator recommendations.
+- **Debounced Inspection & Telemetry:** 60ms debounced hover inspects `(row, col) · Elevation · Cost Class`, with temporary click-to-pin navigation targeting.
+
+### Launching the Dashboard
+
+1. **Start the FastAPI Backend:**
+   ```bash
+   python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+   ```
+
+2. **Start the React Mission Control HUD:**
+   ```bash
+   cd frontend
+   npm install
+   npm run dev
+   ```
+   Open `http://127.0.0.1:5173` in your browser.
+
