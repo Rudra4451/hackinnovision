@@ -1,115 +1,164 @@
-# MARS-09 ODYSSEY: Science Intelligence & React Mission Control
+# MARS-09 ODYSSEY: Planetary Autonomy & Mission Control
 **Track A: Planetary Reconnaissance & Autonomous Navigation**
 
-MARS-09 Odyssey is an autonomous planetary exploration system engineered for 12-hour reconnaissance hackathons. It integrates an 8-directional heuristic path planner (`core/navigation.py`) with a **Science Intelligence Engine** and a real-time **React Dark HUD Mission Control Dashboard**.
+**Autonomous Mars Rover Hackathon Project — Track A: Planetary Reconnaissance & Autonomous Navigation**
 
 ---
 
-## 🚀 Key Architecture & Modules
+> [!WARNING]  
+> **SIMULATED SYNTHETIC MARTIAN DATA NOTICE**  
+> All topographical, elevation, slope, obstacle, science target, and sensor fields produced by this codebase are **simulated synthetic models** engineered for autonomous rover algorithm validation. They do **not** represent actual in-situ flight telemetry or certified orbital reconnaissance from Mars.
+
+---
+
+## 1. System Architecture
+
+The MARS-09 Odyssey platform integrates three core autonomous sub-systems:
+- **Member 2 — Terrain Intelligence (`terrain_intelligence/` & `core/terrain.py`):** 100x100 digital elevation models (DEM), central-difference slope and aspect analysis, Neyman-Scott spatial boulder clustering, 3-tier traversability classification, sensor epistemic uncertainty modeling, and traversability cost mapping.
+- **Integration Contract (`core/costmap.py`):** Standardized 2D NumPy float cost mapping ensuring seamless handoff between terrain perception and path planning.
+- **Member 3 — Autonomous Navigation (`core/navigation.py`):** 8-directional heuristic A* search, diagonal corner-cutting prevention, dual-mode routing (`shortest` vs. `safest`), multi-stop waypoint mission planning, and path telemetry metrics.
+- **Science Intelligence & React Dark HUD (`backend/` & `frontend/`):** FastAPI backend and real-time React telemetry dashboard for mission control, spectroscopic target classification, and Shannon entropy estimation.
 
 ```
-innovision/
-├── core/
-│   └── navigation.py            # Finished autonomous navigation engine (DO NOT MODIFY)
-│
-├── backend/
-│   ├── main.py                  # FastAPI server entry point (CORS enabled)
-│   ├── schemas.py               # Pydantic v2 schemas for telemetry & targets
-│   ├── integrations/
-│   │   ├── navigation_adapter.py# Bridge to core.navigation.compare_routes
-│   │   └── terrain_adapter.py   # Benchmark Jezero crater terrain & JSON inf sanitization
-│   ├── science/
-│   │   ├── identification.py    # Multi-band spectral geological categorization
-│   │   ├── scoring.py           # Hard safety gating & operational ranking (Rule 2)
-│   │   ├── uncertainty.py       # Shannon entropy & observational confidence
-│   │   └── recommendations.py   # Evidence-based Markdown mission briefing
-│   └── api/
-│       ├── navigation.py        # /api/navigation/compare & /api/navigation/terrain
-│       ├── science.py           # /api/science/targets & /api/science/report
-│       └── mission.py           # /api/mission/telemetry
-│
-├── frontend/
-│   ├── src/
-│   │   ├── api/client.js        # Axios REST client
-│   │   ├── components/
-│   │   │   ├── MissionOverview.jsx   # Sol, battery, comms delay, motor status
-│   │   │   ├── NavigationMap.jsx     # Plotly dual-route overlay (Safest vs Shortest)
-│   │   │   ├── RouteMetrics.jsx      # Telemetry trade-off delta table & risk reduction
-│   │   │   ├── RoverSimulation.jsx   # Step-by-step waypoint scrubber & playback
-│   │   │   ├── ScienceTargets.jsx    # Ranked matrix with Rule 2 gating badges
-│   │   │   ├── TargetDetails.jsx     # Spectroscopic analysis & Shannon entropy
-│   │   │   ├── TerrainExplorer.jsx   # Point inspection & custom goal planner
-│   │   │   └── MissionReport.jsx     # Tactical reconnaissance briefing
-│   │   └── styles/
-│   │       ├── global.css            # Dark space HUD theme & scanlines
-│   │       └── dashboard.css         # Grid layout & telemetry styling
-│
-├── data/sample/
-│   └── targets_catalog.json     # Geological candidate sites
-├── tests/
-│   ├── test_navigation.py       # Autonomous path planning test suite
-│   └── test_science_and_backend.py # Science intelligence & API unit tests
-├── requirements.txt
-└── README.md
++---------------------------------------------------------------------------------------+
+|                                MARS-09 ODYSSEY AUTONOMY                               |
++---------------------------------------------------------------------------------------+
+|                                                                                       |
+|   MEMBER 2: TERRAIN INTELLIGENCE                   MEMBER 3: NAVIGATION ENGINE        |
+|   - 100x100 Multi-Octave DEM (Hills, Craters)      - 8-Connected A* Search            |
+|   - Spatial Gradients (dZ/dX, dZ/dY)               - Dual-Mode Routing:               |
+|   - Neyman-Scott Boulder Clustering                  * 'shortest' (distance-minimal)  |
+|   - Traversability Classification (0, 1, 2)          * 'safest' (risk-avoiding)       |
+|   - Epistemic Sensor Uncertainty                   - Corner-Cutting Prevention        |
+|   - Transect Profile Extraction                    - Multi-Stop Waypoint Missions     |
+|                     │                                              ▲                  |
+|                     ▼                                              │                  |
+|   NAVIGATION INTEGRATION CONTRACT (`core/costmap.py`)              │                  |
+|   - 2D NumPy float array (100, 100)                                │                  |
+|   - Matrix indexing (row, col)                                     │                  |
+|   - SAFE terrain:        cost == 1.0 ──────────────────────────────┤                  |
+|   - CAUTION terrain:     cost in [5.0, 20.0] (> 2.0) ──────────────┤                  |
+|   - IMPASSABLE HAZARD:   cost == np.inf ───────────────────────────┘                  |
+|   - RISK MAP:            Separate continuous field in [0.0, 1.0]                      |
+|                                                                                       |
+|   SCIENCE INTELLIGENCE & MISSION CONTROL (`backend/` & `frontend/`)                   |
+|   - FastAPI Backend endpoints (/api/navigation, /api/science, /api/mission)           |
+|   - React Dark Space HUD with Plotly dual-route overlay & target scoring              |
++---------------------------------------------------------------------------------------+
 ```
 
 ---
 
-## 🔬 Science Intelligence Engine
+## 2. Navigation Integration Contract
 
-### 1. Rule 2: Separation of Scientific Value & Operational Priority
-- **Scientific Value ($V_{\text{sci}} \in [0, 100]$)**: Inherent astrobiological merit, hydration index, and geological rarity.
-- **Operational Priority ($P_{\text{op}} \in [0, 100]$)**: Distance, terrain cost, and uncertainty discounted score.
-- **Hard Safety Gate**: If a candidate site is located inside an impassable hazard ($C = \infty$), or if `compare_routes(cost_map, rover, target)["safest"]["route"]["success"] == False`, its operational priority is **locked to 0.0** and marked `UNREACHABLE_HAZARD`.
+Per Member 3's navigation specification:
+1. `cost_map` is a 2D NumPy array with `dtype=float` (`np.float64`).
+2. Array shape matches all terrain grids: `(100, 100)`.
+3. **SAFE** terrain has a cost of exactly **`1.0`**.
+4. **CAUTION** terrain has costs strictly greater than **`2.0`** (scaled within `[5.0, 20.0]` based on slope and rock density).
+5. **IMPASSABLE HAZARD** terrain (slope $\ge 20^\circ$, boulder obstacles) has cost **`np.inf`**.
+6. Spatial coordinates use matrix indexing **`(row, col)`**.
+7. `risk_map` is maintained as a separate continuous array normalized in `[0.0, 1.0]`.
 
-### 2. Shannon Entropy Uncertainty Reasoning
-For class probability distribution $\mathbf{p} = [p_1, \dots, p_K]$:
-$$H(\mathbf{p}) = -\sum_{i=1}^K p_i \log_2(p_i), \quad U = \frac{H(\mathbf{p})}{\log_2(K)}, \quad \text{Confidence} = 1.0 - U$$
-
-### 3. Rule 3: Safe Non-Finite JSON Serialization
-All `np.inf` values in terrain grids are serialized to `null` in JSON with a parallel boolean `hazard_mask`, preventing browser `JSON.parse` crashes while enabling distinct crimson hazard rendering in Plotly.
-
----
-
-## 🛰️ Navigation Integration Contract
-
-The backend interacts with `core/navigation.py` strictly via:
+### Integration API
 ```python
-from core.navigation import find_path, calculate_path_metrics, compare_routes
+from core.terrain import build_terrain_intelligence
+from core.navigation import find_path, compare_routes
 
-res = compare_routes(cost_map, start, goal)
+# 1. Ingest terrain intelligence
+terrain = build_terrain_intelligence(seed=42)
+cost_map = terrain["cost_map"]  # 100x100 float array
+
+# 2. Compute autonomous navigation trajectories
+start = (10, 10)
+goal = (85, 85)
+
+comparison = compare_routes(cost_map, start, goal)
+print(comparison["summary"]["recommendation"])
 ```
-- **Inputs**: `cost_map` (2D float ndarray where 1.0=nominal, >2.0=caution, np.inf=hazard), `start` & `goal` (row, col) tuples.
-- **Dual Outputs**:
-  - `res["safest"]`: Risk-weighted A* route avoiding high-cost caution terrain.
-  - `res["shortest"]`: Direct distance-minimizing A* route.
-  - `res["summary"]`: `both_reachable`, `distance_delta`, `distance_penalty_pct`, `cost_reduction_pct`, `caution_steps_avoided`, `recommendation`.
 
 ---
 
-## 🛠️ Quick Start Instructions
+## 3. Directory Layout
 
-### 1. Backend Setup & Launch
-```bash
-# Activate virtual environment
-.\.venv\Scripts\activate
-
-# Run all unit and integration tests (13 tests)
-python -m unittest discover tests
-
-# Launch FastAPI backend on port 8000
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
 ```
-API Documentation will be available at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
-
-### 2. Frontend Setup & Launch
-```bash
-cd frontend
-
-# Install dependencies (already installed)
-npm install
-
-# Start Vite development server
-npm run dev
+.
+├── core/
+│   ├── __init__.py                    # Core exports
+│   ├── config.py                      # Global grid & threshold constants
+│   ├── costmap.py                     # Member 3 cost map contract generator
+│   ├── navigation.py                  # Member 3 A* navigation engine
+│   └── terrain.py                     # build_terrain_intelligence integration API
+│
+├── terrain_intelligence/              # Member 2 Modular Architecture
+│   ├── __init__.py
+│   ├── config.py                      # Configuration dataclasses & enums
+│   ├── cost_map_generator.py          # Movement cost map computation
+│   ├── elevation_analyzer.py          # Geomorphic statistics & transects
+│   ├── obstacle_detector.py           # Neyman-Scott spatial clustering & masks
+│   ├── pipeline.py                    # End-to-end processing pipeline
+│   ├── slope_analyzer.py              # Gradient vectors, slope (°) & aspect
+│   ├── terrain_classifier.py          # SAFE, CAUTION, HAZARD classification
+│   ├── terrain_generator.py           # Multi-octave synthetic DEM generator
+│   ├── uncertainty_estimator.py       # Epistemic sensor range & shadow model
+│   └── visualizer.py                  # Matplotlib heatmaps & Plotly 3D HTML
+│
+├── backend/                           # Science Intelligence & REST API
+│   ├── main.py                        # FastAPI entry point
+│   ├── schemas.py                     # Pydantic v2 schemas
+│   ├── api/                           # API routes (navigation, science, mission)
+│   ├── integrations/                  # Navigation and terrain adapters
+│   └── science/                       # Spectral identification & safety scoring
+│
+├── frontend/                          # React Dark HUD Dashboard
+│   ├── src/                           # Components, Plotly maps, HUD styling
+│   └── package.json
+│
+├── tests/
+│   ├── test_cost_map_generator.py     # Cost map generator tests
+│   ├── test_elevation_analyzer.py     # Elevation statistics tests
+│   ├── test_navigation.py             # Member 3 navigation scenario tests
+│   ├── test_navigation_contract.py    # Contract verification tests
+│   ├── test_obstacle_detector.py      # Spatial obstacle clustering tests
+│   ├── test_pipeline.py               # Integrated pipeline tests
+│   ├── test_science_and_backend.py    # Science intelligence & API tests
+│   ├── test_slope_analyzer.py         # Analytical slope & gradient tests
+│   ├── test_terrain_classifier.py     # Classification partition tests
+│   ├── test_terrain_generator.py      # Terrain generation & seed tests
+│   ├── test_uncertainty_estimator.py  # Sensor uncertainty tests
+│   └── test_visualizer.py             # Visualization artifact tests
+│
+├── outputs/                           # Generated visualization artifacts
+│   ├── elevation_heatmap.png
+│   ├── slope_heatmap.png
+│   ├── obstacle_map.png
+│   ├── terrain_classification_map.png
+│   ├── movement_cost_map.png
+│   ├── uncertainty_map.png
+│   ├── terrain_intelligence_dashboard.png
+│   ├── terrain_3d.png
+│   └── terrain_3d.html
+│
+├── main.py                            # Standalone demonstration CLI
+├── requirements.txt                   # Project dependencies
+└── pyproject.toml                     # Packaging configuration
 ```
-Open [http://localhost:5173](http://localhost:5173) in your browser to access the **MARS-09 Odyssey Mission Control**.
+
+---
+
+## 4. Installation & Verification
+
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Run full automated test suite:**
+   ```bash
+   pytest tests -v
+   ```
+
+3. **Execute standalone terrain pipeline:**
+   ```bash
+   python main.py
+   ```
