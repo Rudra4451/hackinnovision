@@ -1,24 +1,25 @@
 """
 ODYSSEY MARS-09: Streamlit Rover Mission Control Application
-Main Entrypoint
+Autonomous Mars Rover Simulation — Lead Architect Unified Interface
 """
 
 import streamlit as st
 
-# Core contract imports
+# Core Engine Imports
 from core.config import (
     GRID_SIZE,
     START_POSITION,
     GOAL_POSITION,
     MAX_SLOPE,
+    OBSTACLE_COST,
     BATTERY_CAPACITY_WH
 )
 from core.terrain import generate_terrain, classify_terrain, generate_cost_map
-from core.navigation import find_path, compare_routes
+from core.navigation import find_path, compare_routes, calculate_path_metrics
 from core.science import rank_targets, calculate_confidence
 from core.simulation import simulate_rover
 
-# UI Component imports
+# UI Visual Component Imports
 from components.terrain_map import render_terrain_map
 from components.mission_panel import render_mission_panel
 from components.target_panel import render_target_panel
@@ -30,78 +31,127 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# Header & Subtitle
-st.title("🔴 ODYSSEY MARS-09: Planetary Rover Simulation")
-st.caption("Autonomous Pathfinding, Topographical Hazard Analysis, & Science Exploration")
+# Header
+st.title("🔴 MARS-09 ODYSSEY: Planetary Autonomy & Mission Control")
+st.caption("Track A: Planetary Reconnaissance & Autonomous Navigation — Lead Architect Interface")
 
 # Sidebar Controls
-st.sidebar.header("🕹️ Mission Control & Parameters")
+st.sidebar.header("🕹️ Mission Control Parameters")
 
-grid_size = st.sidebar.slider("Terrain Grid Dimensions", min_value=50, max_value=200, value=GRID_SIZE, step=10)
-max_slope = st.sidebar.slider("Max Traversable Slope (deg)", min_value=10.0, max_value=45.0, value=MAX_SLOPE, step=1.0)
-terrain_seed = st.sidebar.number_input("Terrain Seed", min_value=0, max_value=9999, value=42)
+grid_size = st.sidebar.slider("Terrain Grid Dimensions (cells)", min_value=30, max_value=150, value=GRID_SIZE, step=10)
+max_slope = st.sidebar.slider("Max Traversable Slope (°)", min_value=15.0, max_value=35.0, value=MAX_SLOPE, step=1.0)
+terrain_seed = st.sidebar.number_input("Synthetic DEM Seed", min_value=0, max_value=99999, value=42)
 
-st.sidebar.subheader("📍 Waypoint Coordinates")
-col_s1, col_s2 = st.sidebar.columns(2)
-start_r = col_s1.number_input("Start Row", min_value=0, max_value=grid_size - 1, value=START_POSITION[0])
-start_c = col_s2.number_input("Start Col", min_value=0, max_value=grid_size - 1, value=START_POSITION[1])
+st.sidebar.subheader("📍 Rover Waypoints (Row, Col)")
+c_s1, c_s2 = st.sidebar.columns(2)
+start_r = c_s1.number_input("Start Row", min_value=0, max_value=grid_size - 1, value=START_POSITION[0])
+start_c = c_s2.number_input("Start Col", min_value=0, max_value=grid_size - 1, value=START_POSITION[1])
 
-col_g1, col_g2 = st.sidebar.columns(2)
-goal_r = col_g1.number_input("Goal Row", min_value=0, max_value=grid_size - 1, value=min(GOAL_POSITION[0], grid_size - 1))
-goal_c = col_g2.number_input("Goal Col", min_value=0, max_value=grid_size - 1, value=min(GOAL_POSITION[1], grid_size - 1))
+c_g1, c_g2 = st.sidebar.columns(2)
+goal_r = c_g1.number_input("Goal Row", min_value=0, max_value=grid_size - 1, value=min(GOAL_POSITION[0], grid_size - 1))
+goal_c = c_g2.number_input("Goal Col", min_value=0, max_value=grid_size - 1, value=min(GOAL_POSITION[1], grid_size - 1))
 
-run_sim = st.sidebar.button("🚀 Run Mission Simulation", use_container_width=True, type="primary")
+view_mode = st.sidebar.radio("Map Visualization Mode", ["2D Topography", "3D Surface"], index=0)
 
-# Compute / Cache Core Algorithms
+start_coords = (int(start_r), int(start_c))
+goal_coords = (int(goal_r), int(goal_c))
+
+
+# Compute Pipeline (Cached)
 @st.cache_data
-def get_mission_state(size: int, seed: int, slope: float, start: tuple, goal: tuple):
+def run_autonomy_pipeline(size: int, seed: int, slope_limit: float, start: tuple, goal: tuple):
+    # 1. Terrain Perception
     elevation = generate_terrain(grid_size=size, seed=seed)
-    classified = classify_terrain(elevation, max_slope=slope)
-    cost_map = generate_cost_map(elevation, max_slope=slope)
-    path = find_path(cost_map, start=start, goal=goal)
-    targets = rank_targets([], rover_pos=start)
-    telemetry = simulate_rover(path, cost_map, initial_battery_wh=BATTERY_CAPACITY_WH)
-    return elevation, classified, cost_map, path, targets, telemetry
+    classified = classify_terrain(elevation, max_slope=slope_limit)
+    cost_map = generate_cost_map(elevation, max_slope=slope_limit)
 
-elevation, classified, cost_map, path, targets, telemetry = get_mission_state(
-    grid_size, terrain_seed, max_slope, (start_r, start_c), (goal_r, goal_c)
+    # 2. Autonomous Navigation (Dual-Mode A*)
+    path_safest = find_path(cost_map, start=start, goal=goal, mode="safest")
+    path_shortest = find_path(cost_map, start=start, goal=goal, mode="shortest")
+
+    # 3. Route Comparison
+    routes_dict = compare_routes(cost_map, [path_shortest, path_safest], ["Shortest Route", "Safest Route"])
+
+    # 4. Science Target Intelligence
+    targets = rank_targets([], rover_pos=start, cost_map=cost_map)
+
+    # 5. Rover Dynamics Simulation (Follows Safest Path by default)
+    active_path = path_safest if path_safest else path_shortest
+    telemetry = simulate_rover(active_path, cost_map, initial_battery_wh=BATTERY_CAPACITY_WH)
+
+    return elevation, classified, cost_map, path_safest, path_shortest, routes_dict, targets, telemetry
+
+
+elevation, classified, cost_map, path_safest, path_shortest, routes_dict, targets, telemetry = run_autonomy_pipeline(
+    grid_size, terrain_seed, max_slope, start_coords, goal_coords
 )
 
-# Render Primary Telemetry Strip
-render_mission_panel(telemetry)
+# 1. Real-Time Telemetry Bar
+render_mission_panel(telemetry, routes_dict)
 
-# Tabs Layout
-tab_map, tab_science, tab_nav, tab_arch = st.tabs([
-    "🗺️ Surface Topography",
-    "🔬 Science Operations",
-    "🧭 Navigation Analysis",
-    "📐 Architecture & Contracts"
+st.write("")
+
+# 2. Tabs Interface
+tab_map, tab_nav, tab_science, tab_contracts = st.tabs([
+    "🗺️ Topographical Reconnaissance",
+    "🧭 Dual-Mode Route Analysis",
+    "🔬 Science Target Queue",
+    "📐 System Contracts & Architecture"
 ])
 
 with tab_map:
-    map_fig = render_terrain_map(elevation, path=path, targets=targets)
+    map_fig = render_terrain_map(
+        elevation,
+        path_safest=path_safest,
+        path_shortest=path_shortest,
+        targets=targets,
+        view_mode=view_mode
+    )
     if map_fig is not None:
         st.plotly_chart(map_fig, use_container_width=True)
     else:
-        st.warning("Plotly not installed. Please install plotly to view interactive surface maps.")
+        st.warning("Plotly required for interactive map rendering.")
+
+with tab_nav:
+    st.subheader("Dual-Mode A* Navigation & Trade-Off Matrix")
+    c_left, c_right = st.columns([1, 1])
+
+    with c_left:
+        st.markdown("#### ⚡ Shortest Route (Distance-Minimal)")
+        m_short = routes_dict.get("Shortest Route", {})
+        st.write(f"- **Distance:** `{m_short.get('distance_m', 0):.2f} m`")
+        st.write(f"- **Total Cumulative Cost:** `{m_short.get('estimated_cost', 0):.2f}`")
+        st.write(f"- **Caution Zone Steps:** `{m_short.get('caution_steps', 0)}`")
+        st.write(f"- **Feasibility:** `{'✅ FEASIBLE' if m_short.get('feasible') else '❌ BLOCKED'}`")
+
+    with c_right:
+        st.markdown("#### 🛡️ Safest Route (Risk-Averse)")
+        m_safe = routes_dict.get("Safest Route", {})
+        st.write(f"- **Distance:** `{m_safe.get('distance_m', 0):.2f} m`")
+        st.write(f"- **Total Cumulative Cost:** `{m_safe.get('estimated_cost', 0):.2f}`")
+        st.write(f"- **Caution Zone Steps:** `{m_safe.get('caution_steps', 0)}`")
+        st.write(f"- **Feasibility:** `{'✅ FEASIBLE' if m_safe.get('feasible') else '❌ BLOCKED'}`")
+
+    st.write("---")
+    st.json(routes_dict)
 
 with tab_science:
     render_target_panel(targets)
     st.write("---")
-    st.subheader("Sample Target Confidence Verification")
-    sample_conf = calculate_confidence({"id": "SELECTED_SAMPLE"})
-    st.progress(sample_conf, text=f"Spectrometric Confidence: {sample_conf * 100:.1f}%")
+    st.subheader("Spectrometer Confidence & Biosignature Verification")
+    if targets:
+        top_target = targets[0]
+        conf = top_target.get("confidence", 0.85)
+        st.markdown(f"**Top Ranked Candidate:** `{top_target['id']}` ({top_target.get('type')})")
+        st.progress(conf, text=f"Spectrometric Confidence Score: {conf * 100:.1f}%")
 
-with tab_nav:
-    st.subheader("Route Comparison & Feasibility")
-    alt_path = [(r, c) for r, c in path if r % 2 == 0]
-    comparison = compare_routes(cost_map, [path, alt_path], ["Primary Planned Route", "Alternative Route"])
-    st.json(comparison)
-
-with tab_arch:
-    st.subheader("System Contracts & Module Division")
+with tab_contracts:
+    st.subheader("Architectural Module Ownership & Interface Contracts")
     st.markdown("""
-    - **Teammate A (Terrain):** Implements fractal DEM generation & gradient cost calculation in `core/terrain.py`.
-    - **Teammate B (Navigation):** Implements A* / Dijkstra graph search & rover dynamics in `core/navigation.py` and `core/simulation.py`.
-    - **Teammate C (Science):** Implements multi-objective priority ranking & instrument telemetry in `core/science.py`.
+    | Subsystem | Owner | Primary Module | Exported Contract |
+    |---|---|---|---|
+    | **Terrain Intelligence** | Member 2 | `core/terrain.py` | `cost_map` (2D float: `1.0` Safe, `[5, 20]` Caution, `inf` Hazard) |
+    | **Autonomous Navigation** | Member 3 | `core/navigation.py` | 8-connected A* (`find_path`, `compare_routes`) with corner-cut protection |
+    | **Science Intelligence** | Member 4 | `core/science.py` | Shannon entropy uncertainty & accessibility-gated operational scoring |
+    | **Mission Simulation** | Lead Architect | `core/simulation.py` | Rover kinematics, energy draw, and sol time progression |
     """)
