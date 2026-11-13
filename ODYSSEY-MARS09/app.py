@@ -22,7 +22,7 @@ from utils.helpers import validate_navigation_payload
 
 # UI Visual Component Imports
 from components.terrain_map import render_terrain_map
-from components.mission_panel import render_mission_panel
+from components.mission_panel import render_mission_panel, render_navigation_metrics
 from components.target_panel import render_target_panel
 
 st.set_page_config(
@@ -115,33 +115,10 @@ with tab_map:
         st.plotly_chart(map_fig, use_container_width=True)
     else:
         st.warning("Plotly required for interactive map rendering.")
-    else:
-        st.warning("Plotly required for interactive map rendering.")
 
 with tab_nav:
-    st.subheader("Dual-Mode A* Navigation & Trade-Off Matrix")
-    c_left, c_right = st.columns([1, 1])
-
-    with c_left:
-        st.markdown("#### ⚡ Shortest Route (Distance-Minimal)")
-        m_short = res["shortest"]["metrics"]
-        r_short = res["shortest"]["route"]
-        st.write(f"- **Status:** `{'✅ FOUND' if r_short.get('success') else '❌ FAILED'}`")
-        st.write(f"- **Distance:** `{m_short.get('total_distance', 0):.2f} m`")
-        st.write(f"- **Total Cumulative Cost:** `{m_short.get('total_cost', 0):.2f}`")
-        st.write(f"- **Caution Zone Steps:** `{m_short.get('caution_steps', 0)}`")
-
-    with c_right:
-        st.markdown("#### 🛡️ Safest Route (Risk-Averse)")
-        m_safe = res["safest"]["metrics"]
-        r_safe = res["safest"]["route"]
-        st.write(f"- **Status:** `{'✅ FOUND' if r_safe.get('success') else '❌ FAILED'}`")
-        st.write(f"- **Distance:** `{m_safe.get('total_distance', 0):.2f} m`")
-        st.write(f"- **Total Cumulative Cost:** `{m_safe.get('total_cost', 0):.2f}`")
-        st.write(f"- **Caution Zone Steps:** `{m_safe.get('caution_steps', 0)}`")
-
+    render_navigation_metrics(res)
     st.write("---")
-    st.info(f"**Tactical Recommendation:** {res['summary'].get('recommendation', 'N/A')}")
     st.json(res)
 
 with tab_science:

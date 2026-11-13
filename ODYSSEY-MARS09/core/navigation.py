@@ -185,6 +185,8 @@ def compare_routes(
     else:
         recommendation = "Mission Abort: Destination unreachable by planners due to terrain hazards."
 
+    caution_avoided = max(0, shortest_metrics["caution_steps"] - safest_metrics["caution_steps"])
+
     return {
         "shortest": {
             "route": {
@@ -210,6 +212,7 @@ def compare_routes(
         },
         "summary": {
             "distance_penalty_pct": dist_penalty,
+            "caution_steps_avoided": caution_avoided,
             "recommendation": recommendation,
         },
     }
