@@ -1,4 +1,5 @@
 import pytest
+pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient
 from backend.main import app
 from backend.integrations.terrain_adapter import deserialize_cost_map_from_json

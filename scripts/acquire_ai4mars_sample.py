@@ -122,3 +122,4 @@ def acquire_ai4mars_subset():
 
 if __name__ == "__main__":
     acquire_ai4mars_subset()
+
