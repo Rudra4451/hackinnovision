@@ -24,7 +24,10 @@ from terrain_intelligence import (
 )
 
 # Expose top-level FastAPI application instance for Vercel and ASGI runners
-from backend.main import app
+try:
+    from backend.main import app
+except ImportError:
+    app = None
 
 
 def print_banner():
