@@ -45,7 +45,7 @@ class NavigationRequest(BaseModel):
     start: Tuple[int, int] = Field(default=(2, 2))
     goal: Tuple[int, int] = Field(default=(45, 45))
     use_custom_cost_map: Optional[bool] = False
-    custom_cost_map: Optional[List[List[Optional[float]]]] = None
+    custom_cost_map: Optional[List[List[Any]]] = None
 
 
 class MissionWaypointRequest(BaseModel):

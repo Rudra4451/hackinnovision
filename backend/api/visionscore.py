@@ -90,6 +90,7 @@ def get_visionscore_status() -> Dict[str, Any]:
 
 
 _resolve_environment = resolve_environment
+MAX_UPLOAD_BYTES = 15 * 1024 * 1024  # 15 MB payload protection
 
 
 @router.post("/segment")
@@ -106,11 +107,19 @@ async def segment_uploaded_image(
 
     if file is not None and file.filename:
         content = await file.read()
-        unified_img = _INPUT_HANDLER.load_from_bytes(
-            content,
-            filename=file.filename,
-            environment=env_profile,
-        )
+        if len(content) > MAX_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Uploaded image exceeds maximum allowed limit of {MAX_UPLOAD_BYTES // (1024 * 1024)}MB.",
+            )
+        try:
+            unified_img = _INPUT_HANDLER.load_from_bytes(
+                content,
+                filename=file.filename,
+                environment=env_profile,
+            )
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Image decoding failed: {str(e)}")
     else:
         # Fall back to live/simulated camera frame
         unified_img = _INPUT_HANDLER.capture_frame(environment_override=env_profile)
@@ -158,8 +167,10 @@ def get_alert_detail(event_id: str) -> Dict[str, Any]:
         raise HTTPException(status_code=404, detail=f"Alert {event_id} not found")
 
     payload = alert.to_dict(include_images=True)
-    payload["captured_image_data_uri"] = _to_base64_data_uri(alert.captured_image)
-    payload["annotated_image_data_uri"] = _to_base64_data_uri(alert.annotated_image)
+    if alert.captured_image is not None:
+        payload["captured_image_data_uri"] = _to_base64_data_uri(alert.captured_image)
+    if alert.annotated_image is not None:
+        payload["annotated_image_data_uri"] = _to_base64_data_uri(alert.annotated_image)
     return payload
 
 

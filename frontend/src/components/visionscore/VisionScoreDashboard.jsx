@@ -23,7 +23,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 
-const BACKEND_BASE = 'http://127.0.0.1:8000';
+const BACKEND_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000';
 
 // Mars AI4Mars NASA JPL Benchmark Taxonomy (Active Supported vs Planned Models)
 const SEMANTIC_CLASSES = [

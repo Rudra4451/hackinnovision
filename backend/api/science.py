@@ -20,14 +20,17 @@ TARGETS_FILE = os.path.join("data", "sample", "targets_catalog.json")
 def load_raw_targets() -> List[Dict[str, Any]]:
     if not os.path.exists(TARGETS_FILE):
         return []
-    with open(TARGETS_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        with open(TARGETS_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return []
 
 
 @router.get("/targets", response_model=ScienceAnalysisResponse)
 def get_ranked_science_targets(
-    rover_r: int = Query(default=2, ge=0),
-    rover_c: int = Query(default=2, ge=0),
+    rover_r: int = Query(default=2, ge=0, le=400),
+    rover_c: int = Query(default=2, ge=0, le=400),
 ) -> Dict[str, Any]:
     """
     Evaluate, gate, and rank all candidate science targets based on current rover position.
@@ -61,8 +64,8 @@ def get_ranked_science_targets(
 @router.get("/targets/{target_id}", response_model=ScienceTarget)
 def get_target_detail(
     target_id: str,
-    rover_r: int = Query(default=2, ge=0),
-    rover_c: int = Query(default=2, ge=0),
+    rover_r: int = Query(default=2, ge=0, le=400),
+    rover_c: int = Query(default=2, ge=0, le=400),
 ) -> Dict[str, Any]:
     """Retrieve detailed assessment and route breakdown for a specific target."""
     raw_targets = load_raw_targets()
@@ -81,8 +84,8 @@ def get_target_detail(
 
 @router.get("/report")
 def get_mission_brief_report(
-    rover_r: int = Query(default=2, ge=0),
-    rover_c: int = Query(default=2, ge=0),
+    rover_r: int = Query(default=2, ge=0, le=400),
+    rover_c: int = Query(default=2, ge=0, le=400),
 ) -> Dict[str, str]:
     """Generate Markdown mission briefing."""
     raw_targets = load_raw_targets()

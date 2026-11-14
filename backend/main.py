@@ -2,9 +2,11 @@
 MARS-09 Odyssey Mission Control — FastAPI Backend Application.
 """
 
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.api.mission import router as mission_router
 from backend.api.navigation import router as navigation_router
@@ -21,10 +23,16 @@ app = FastAPI(
     version="2.0.0",
 )
 
-# Enable CORS for React frontend (Vite default :5173, etc.)
+# Secure CORS configuration: Restrict to local dev origins when credentials are enabled
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -32,6 +40,11 @@ app.add_middleware(
 
 # Enable GZip compression for large DEM arrays
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+# Mount outputs directory for safely serving obstacle alert screenshots & logs
+OUTPUTS_DIR = os.path.abspath("outputs")
+os.makedirs(os.path.join(OUTPUTS_DIR, "obstacle_alerts"), exist_ok=True)
+app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
 
 # Register route modules
 app.include_router(navigation_router)

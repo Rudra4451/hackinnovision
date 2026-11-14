@@ -179,18 +179,41 @@ def extract_hazard_mask(cost_map: np.ndarray) -> List[List[bool]]:
     return mask
 
 
-def deserialize_cost_map_from_json(display_grid: List[List[Optional[float]]]) -> np.ndarray:
-    """Reconstruct NumPy cost_map from JSON list, restoring null to np.inf."""
+def deserialize_cost_map_from_json(display_grid: List[List[Any]]) -> np.ndarray:
+    """
+    Reconstruct NumPy cost_map from JSON list, safely validating matrix dimensions,
+    non-empty bounds, jagged arrays, and converting null/Infinity sentinels to np.inf.
+    """
+    if not display_grid or not isinstance(display_grid, list):
+        raise ValueError("Custom cost map must be a non-empty 2D list.")
     rows = len(display_grid)
-    cols = len(display_grid[0]) if rows > 0 else 0
+    if rows < 2 or rows > 500:
+        raise ValueError(f"Custom cost map rows ({rows}) must be between 2 and 500.")
+    if not isinstance(display_grid[0], list):
+        raise ValueError("Custom cost map rows must be lists.")
+    cols = len(display_grid[0])
+    if cols < 2 or cols > 500:
+        raise ValueError(f"Custom cost map cols ({cols}) must be between 2 and 500.")
+
     arr = np.ones((rows, cols), dtype=float)
     for r in range(rows):
+        row = display_grid[r]
+        if not isinstance(row, list) or len(row) != cols:
+            raise ValueError(f"Custom cost map row {r} length does not match grid width {cols}.")
         for c in range(cols):
-            val = display_grid[r][c]
-            if val is None or (isinstance(val, (int, float)) and val >= 1e9):
+            val = row[c]
+            if val is None or val == "Infinity" or (isinstance(val, (int, float)) and (math.isinf(val) or val >= 1e9)):
+                arr[r, c] = np.inf
+            elif isinstance(val, (int, float)) and math.isnan(val):
+                arr[r, c] = np.inf
+            elif val == "NaN":
                 arr[r, c] = np.inf
             else:
-                arr[r, c] = float(val)
+                try:
+                    fval = float(val)
+                    arr[r, c] = fval if fval > 0 else 1.0
+                except (ValueError, TypeError):
+                    arr[r, c] = np.inf
     return arr
 
 

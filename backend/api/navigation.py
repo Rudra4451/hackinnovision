@@ -34,7 +34,10 @@ def compare_navigation_routes(req: NavigationRequest) -> Dict[str, Any]:
     Execute dual-route comparison ('shortest' vs 'safest') between start and goal.
     """
     if req.use_custom_cost_map and req.custom_cost_map:
-        cost_map = deserialize_cost_map_from_json(req.custom_cost_map)
+        try:
+            cost_map = deserialize_cost_map_from_json(req.custom_cost_map)
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=f"Invalid custom cost map: {str(ve)}")
     else:
         cost_map, _ = get_default_terrain()
 
