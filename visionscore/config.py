@@ -9,20 +9,31 @@ Notice:
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 
 class EnvironmentProfile(str, Enum):
     """
     Environmental profiles for vision-based terrain analysis.
 
-    Different planetary environments exhibit distinct atmospheric scattering,
-    illumination spectra, and surface geology. Earth-trained models cannot be
-    assumed to transfer directly to Martian surfaces without calibration.
+    MARS is the primary and only operational flight environment for ODYSSEY.
+    SIMULATION_MARS provides high-fidelity synthetic simulations for Mars operations.
+    EARTH and SIMULATION are preserved strictly for backward-compatible testing.
     """
     MARS = "MARS"
-    EARTH = "EARTH"
+    SIMULATION_MARS = "SIMULATION_MARS"
+
+    # Backward compatibility aliases
     SIMULATION = "SIMULATION"
+    EARTH = "EARTH"
+
+
+# Active operational profiles permitted in production and mission control UI
+ACTIVE_ENVIRONMENT_PROFILES: Tuple[EnvironmentProfile, ...] = (
+    EnvironmentProfile.MARS,
+    EnvironmentProfile.SIMULATION_MARS,
+)
+OPERATIONAL_ENVIRONMENTS: Tuple[EnvironmentProfile, ...] = ACTIVE_ENVIRONMENT_PROFILES
 
 
 class VisualTerrainClass(str, Enum):
@@ -35,38 +46,116 @@ class VisualTerrainClass(str, Enum):
 
 class SemanticClass(str, Enum):
     """
-    Pixel-level geological and surface semantic categories for VisionScore 2.0.
+    Pixel-level geological and surface semantic categories for ODYSSEY VisionScore.
     Kept strictly distinct from physical traversability classifications.
+
+    Mars Operational Taxonomy:
+    - ROCK: Exposed bedrock outcrops, scree, small stones, and gravel.
+    - BOULDER: Large isolated rock masses and morphological hazards.
+    - SAND: Aeolian sand sheets, dune fields, and fine rippled deposits.
+    - REGOLITH: Unconsolidated loose rocky substrate and weathered debris.
+    - SOIL: Oxidized Martian surface plains and cohesive ground.
+    - BEDROCK: Exposed solid rock pavement and consolidated basement strata.
+    - DUST: Fine-grained atmospheric fallout mantling surface features.
+    - CRATER: Impact depression structures, rim escarpments, and bowl walls.
+    - UNKNOWN: Degraded visibility, high-contrast shadows, glare, or unclassified regions.
+
+    Legacy / Terrestrial Aliases:
+    - OBSTACLE: Legacy alias for severe geometric hazards (mapped to BOULDER / HAZARD).
+    - VEGETATION: Terrestrial biological biomass (unsupported on Mars).
+    - WATER: Terrestrial liquid bodies (unsupported on Mars).
     """
+    # Mars Target Taxonomy
     ROCK = "ROCK"
+    BOULDER = "BOULDER"
     SAND = "SAND"
+    REGOLITH = "REGOLITH"
     SOIL = "SOIL"
+    BEDROCK = "BEDROCK"
+    DUST = "DUST"
+    CRATER = "CRATER"
+    UNKNOWN = "UNKNOWN"
+
+    # Legacy / Terrestrial Aliases
+    OBSTACLE = "OBSTACLE"
     VEGETATION = "VEGETATION"
     WATER = "WATER"
-    OBSTACLE = "OBSTACLE"
-    UNKNOWN = "UNKNOWN"
+
+
+# Full Mars Target Semantic Taxonomy
+MARS_TARGET_TAXONOMY: Tuple[SemanticClass, ...] = (
+    SemanticClass.ROCK,
+    SemanticClass.BOULDER,
+    SemanticClass.SAND,
+    SemanticClass.REGOLITH,
+    SemanticClass.SOIL,
+    SemanticClass.BEDROCK,
+    SemanticClass.DUST,
+    SemanticClass.CRATER,
+    SemanticClass.UNKNOWN,
+)
+
+# Classes recognized by the baseline optical heuristic model (PSM-TCS v2.0)
+HEURISTIC_RECOGNIZED_CLASSES: Tuple[SemanticClass, ...] = (
+    SemanticClass.ROCK,
+    SemanticClass.BOULDER,
+    SemanticClass.SAND,
+    SemanticClass.SOIL,
+    SemanticClass.OBSTACLE,
+    SemanticClass.UNKNOWN,
+)
+
+# Extended classes defined in taxonomy for AI4Mars deep-learning integration
+EXTENDED_PLANNED_CLASSES: Tuple[SemanticClass, ...] = (
+    SemanticClass.REGOLITH,
+    SemanticClass.BEDROCK,
+    SemanticClass.DUST,
+    SemanticClass.CRATER,
+)
 
 
 # Consistent, publication-grade RGB color palette for semantic visualization
 SEMANTIC_COLOR_PALETTE: Dict[SemanticClass, Tuple[int, int, int]] = {
-    SemanticClass.ROCK: (128, 128, 128),       # Slate Gray (geological outcrops / boulders)
+    # Mars Taxonomy
+    SemanticClass.ROCK: (128, 128, 128),       # Slate Gray (geological outcrops / scree)
+    SemanticClass.BOULDER: (75, 85, 99),       # Dark Slate / Charcoal (large rock hazards)
     SemanticClass.SAND: (237, 201, 137),       # Ochre / Golden Sand (smooth Martian drifts)
-    SemanticClass.SOIL: (184, 80, 50),         # Martian Rust Red / Regolith
+    SemanticClass.REGOLITH: (194, 65, 12),     # Terracotta / Rust (weathered mantle)
+    SemanticClass.SOIL: (184, 80, 50),         # Martian Rust Red / Oxidized surface
+    SemanticClass.BEDROCK: (107, 114, 128),    # Stone Gray Pavement (firm basement rock)
+    SemanticClass.DUST: (245, 158, 11),        # Pale Ochre / Dust Yellow (fine atmospheric mantling)
+    SemanticClass.CRATER: (67, 20, 7),         # Deep Umber / Crater Shadow (impact rims & depressions)
+    SemanticClass.UNKNOWN: (108, 52, 131),     # Deep Amethyst Violet (shadows, glare, unclassified)
+
+    # Legacy Aliases
+    SemanticClass.OBSTACLE: (231, 76, 60),     # Crimson Red (impassable crags, drop-offs, sharp rocks)
     SemanticClass.VEGETATION: (46, 204, 113),  # Emerald Green (terrestrial / synthetic)
     SemanticClass.WATER: (52, 152, 219),       # Cyan / Blue (terrestrial / synthetic)
-    SemanticClass.OBSTACLE: (231, 76, 60),     # Crimson Red (impassable crags, drop-offs, sharp rocks)
-    SemanticClass.UNKNOWN: (108, 52, 131),     # Deep Amethyst Violet (shadows, glare, unclassified)
 }
 
 # Mapping from semantic surface classes to candidate traversability tiers
 SEMANTIC_TRAVERSABILITY_MAP: Dict[SemanticClass, VisualTerrainClass] = {
+    # SAFE: Flat, trafficable surfaces
     SemanticClass.SAND: VisualTerrainClass.SAFE,
     SemanticClass.SOIL: VisualTerrainClass.SAFE,
+    SemanticClass.REGOLITH: VisualTerrainClass.SAFE,
+    SemanticClass.BEDROCK: VisualTerrainClass.SAFE,
+
+    # CAUTION: Moderate roughness or mobility penalty
     SemanticClass.ROCK: VisualTerrainClass.CAUTION,
-    SemanticClass.VEGETATION: VisualTerrainClass.CAUTION,
-    SemanticClass.WATER: VisualTerrainClass.HAZARD,
+    SemanticClass.DUST: VisualTerrainClass.CAUTION,
+
+    # HAZARD: Impassable or dangerous morphology
+    SemanticClass.BOULDER: VisualTerrainClass.HAZARD,
+    SemanticClass.CRATER: VisualTerrainClass.HAZARD,
     SemanticClass.OBSTACLE: VisualTerrainClass.HAZARD,
+    SemanticClass.WATER: VisualTerrainClass.HAZARD,
+
+    # UNKNOWN: Degraded observation or unclassified
     SemanticClass.UNKNOWN: VisualTerrainClass.UNKNOWN,
+
+    # Legacy
+    SemanticClass.VEGETATION: VisualTerrainClass.CAUTION,
 }
 
 
@@ -98,31 +187,17 @@ DEFAULT_ENVIRONMENT_PARAMETERS: Dict[EnvironmentProfile, EnvironmentParameters] 
         shadow_luminance_max=22.0,
         saturation_luminance_min=242.0,
         description="Martian surface profile: basaltic rock, ferric oxide dust, high-contrast shadows.",
-        supported_classes=(
-            SemanticClass.ROCK,
-            SemanticClass.SAND,
-            SemanticClass.SOIL,
-            SemanticClass.OBSTACLE,
-            SemanticClass.UNKNOWN,
-        ),
+        supported_classes=HEURISTIC_RECOGNIZED_CLASSES,
     ),
-    EnvironmentProfile.EARTH: EnvironmentParameters(
-        name="EARTH",
-        expected_redness_ratio=0.08,
-        texture_caution_threshold=18.0,
-        texture_hazard_threshold=36.0,
-        shadow_luminance_max=15.0,
-        saturation_luminance_min=248.0,
-        description="Terrestrial surface profile: standard daylight scattering, gravel, dirt, and varied albedo.",
-        supported_classes=(
-            SemanticClass.ROCK,
-            SemanticClass.SAND,
-            SemanticClass.SOIL,
-            SemanticClass.VEGETATION,
-            SemanticClass.WATER,
-            SemanticClass.OBSTACLE,
-            SemanticClass.UNKNOWN,
-        ),
+    EnvironmentProfile.SIMULATION_MARS: EnvironmentParameters(
+        name="SIMULATION_MARS",
+        expected_redness_ratio=0.28,
+        texture_caution_threshold=12.0,
+        texture_hazard_threshold=28.0,
+        shadow_luminance_max=22.0,
+        saturation_luminance_min=242.0,
+        description="High-fidelity Martian simulation: synthetic Mars surface, ferric regolith, boulder scatter.",
+        supported_classes=HEURISTIC_RECOGNIZED_CLASSES,
     ),
     EnvironmentProfile.SIMULATION: EnvironmentParameters(
         name="SIMULATION",
@@ -131,7 +206,17 @@ DEFAULT_ENVIRONMENT_PARAMETERS: Dict[EnvironmentProfile, EnvironmentParameters] 
         texture_hazard_threshold=30.0,
         shadow_luminance_max=20.0,
         saturation_luminance_min=245.0,
-        description="Synthetic simulation profile: procedurally generated or rendered virtual landscapes.",
+        description="Legacy synthetic simulation profile (alias for SIMULATION_MARS).",
+        supported_classes=HEURISTIC_RECOGNIZED_CLASSES,
+    ),
+    EnvironmentProfile.EARTH: EnvironmentParameters(
+        name="EARTH",
+        expected_redness_ratio=0.08,
+        texture_caution_threshold=18.0,
+        texture_hazard_threshold=36.0,
+        shadow_luminance_max=15.0,
+        saturation_luminance_min=248.0,
+        description="Deprecated terrestrial profile (preserved solely for backward compatibility testing).",
         supported_classes=(
             SemanticClass.ROCK,
             SemanticClass.SAND,
@@ -174,7 +259,7 @@ class VisionConfig:
     Global configuration for VisionScore Stage 1 image processing.
 
     Attributes:
-        default_environment: Default environment profile.
+        default_environment: Default environment profile (MARS).
         max_input_dimension: Maximum image resolution dimension (resizes if exceeded).
         min_input_dimension: Minimum supported image resolution dimension.
         analysis_grid_shape: Subdivision grid (rows, cols) for regional patch segmentation.
@@ -191,7 +276,44 @@ class VisionConfig:
         default_factory=lambda: dict(DEFAULT_ENVIRONMENT_PARAMETERS)
     )
 
-    def get_env_params(self, env: EnvironmentProfile) -> EnvironmentParameters:
-        """Retrieve optical parameters for the target environment."""
-        return self.environment_params.get(env, self.environment_params[EnvironmentProfile.SIMULATION])
+    def get_env_params(self, env: Union[EnvironmentProfile, str]) -> EnvironmentParameters:
+        """Retrieve optical parameters for the target environment, defaulting safely to MARS."""
+        if isinstance(env, str):
+            try:
+                env = EnvironmentProfile(env.upper())
+            except ValueError:
+                env = EnvironmentProfile.MARS
+
+        if env in self.environment_params:
+            return self.environment_params[env]
+        if env == EnvironmentProfile.SIMULATION:
+            return self.environment_params.get(
+                EnvironmentProfile.SIMULATION_MARS,
+                self.environment_params[EnvironmentProfile.MARS]
+            )
+        return self.environment_params.get(
+            EnvironmentProfile.MARS,
+            next(iter(self.environment_params.values()))
+        )
+
+
+def resolve_environment(env_input: Union[str, EnvironmentProfile]) -> EnvironmentProfile:
+    """
+    Safely resolves an environment string or enum to an active Mars operational profile or legacy alias.
+    Guarantees strict fallback to MARS for any invalid or missing input.
+    """
+    if isinstance(env_input, EnvironmentProfile):
+        return env_input
+    if not isinstance(env_input, str):
+        return EnvironmentProfile.MARS
+
+    clean = env_input.strip().upper()
+    if clean in ("SIMULATION", "SIM", "SIM_MARS", "SIMULATION_MARS"):
+        return EnvironmentProfile.SIMULATION_MARS
+    if clean == "EARTH":
+        return EnvironmentProfile.EARTH
+    try:
+        return EnvironmentProfile(clean)
+    except ValueError:
+        return EnvironmentProfile.MARS
 

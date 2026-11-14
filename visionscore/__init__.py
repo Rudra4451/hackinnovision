@@ -16,15 +16,21 @@ Notice:
 """
 
 from visionscore.config import (
+    ACTIVE_ENVIRONMENT_PROFILES,
     AlertConfig,
     DEFAULT_ENVIRONMENT_PARAMETERS,
+    EXTENDED_PLANNED_CLASSES,
     EnvironmentParameters,
     EnvironmentProfile,
+    HEURISTIC_RECOGNIZED_CLASSES,
+    MARS_TARGET_TAXONOMY,
+    OPERATIONAL_ENVIRONMENTS,
     SEMANTIC_COLOR_PALETTE,
     SEMANTIC_TRAVERSABILITY_MAP,
     SemanticClass,
     VisionConfig,
     VisualTerrainClass,
+    resolve_environment,
 )
 from visionscore.image_input import (
     BaseCameraStream,
@@ -70,14 +76,20 @@ __version__ = "2.0.0"
 __all__ = [
     # Configuration & Profiles
     "EnvironmentProfile",
+    "ACTIVE_ENVIRONMENT_PROFILES",
+    "OPERATIONAL_ENVIRONMENTS",
     "VisualTerrainClass",
     "SemanticClass",
+    "MARS_TARGET_TAXONOMY",
+    "HEURISTIC_RECOGNIZED_CLASSES",
+    "EXTENDED_PLANNED_CLASSES",
     "SEMANTIC_COLOR_PALETTE",
     "SEMANTIC_TRAVERSABILITY_MAP",
     "EnvironmentParameters",
     "VisionConfig",
     "AlertConfig",
     "DEFAULT_ENVIRONMENT_PARAMETERS",
+    "resolve_environment",
     # Input Exceptions
     "VisionInputError",
     "InvalidImageError",

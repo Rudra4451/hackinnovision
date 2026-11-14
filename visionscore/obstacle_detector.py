@@ -200,8 +200,11 @@ class ObstacleEventDetector:
                 return None
 
         # 2. Check for Obstacle Presence
-        # Calculate obstacle coverage (SemanticClass.OBSTACLE)
-        obstacle_pct = segmentation.class_pixel_percentages.get(SemanticClass.OBSTACLE.value, 0.0)
+        # Calculate obstacle coverage (SemanticClass.BOULDER or legacy SemanticClass.OBSTACLE)
+        obstacle_pct = (
+            segmentation.class_pixel_percentages.get(SemanticClass.BOULDER.value, 0.0)
+            + segmentation.class_pixel_percentages.get(SemanticClass.OBSTACLE.value, 0.0)
+        )
         overall_confidence = segmentation.confidence_information.get("overall_confidence", 0.0)
 
         # Check if thresholds are met
@@ -212,10 +215,10 @@ class ObstacleEventDetector:
             return None
 
         # 3. Locate Major Obstacle Region
-        # Find the largest obstacle region among region segments
+        # Find the largest obstacle or boulder region among region segments
         obstacle_regions = [
             r for r in segmentation.region_segments
-            if r.get("semantic_class") == SemanticClass.OBSTACLE.value
+            if r.get("semantic_class") in (SemanticClass.BOULDER.value, SemanticClass.OBSTACLE.value)
         ]
         if not obstacle_regions:
             # Fallback if region segmenter grouped it differently

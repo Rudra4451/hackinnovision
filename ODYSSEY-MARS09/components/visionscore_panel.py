@@ -9,7 +9,13 @@ import numpy as np
 from PIL import Image
 import streamlit as st
 
-from visionscore.config import EnvironmentProfile, SEMANTIC_COLOR_PALETTE, SemanticClass
+from visionscore.config import (
+    ACTIVE_ENVIRONMENT_PROFILES,
+    EnvironmentProfile,
+    MARS_TARGET_TAXONOMY,
+    SEMANTIC_COLOR_PALETTE,
+    SemanticClass,
+)
 from visionscore.image_input import SimulatedCameraFeed, UnifiedImage
 from visionscore.obstacle_detector import get_obstacle_detector
 from visionscore.semantic import segment_terrain
@@ -26,7 +32,7 @@ def render_visionscore_panel() -> None:
     with c1:
         env_choice = st.selectbox(
             "Operational Environment Profile",
-            ["MARS", "EARTH", "SIMULATION"],
+            ["MARS", "SIMULATION_MARS"],
             index=0,
             key="vs_env_select",
         )
@@ -87,19 +93,20 @@ def render_visionscore_panel() -> None:
         st.markdown(f"**Semantic Overlay (Dominant: `{seg_result.dominant_class}`)**")
         st.image(seg_result.overlay_image, use_container_width=True)
 
-    # 6. Semantic Class Distribution Bars
+    # 6. Semantic Class Distribution Bars (Mars Target Taxonomy)
     st.write("---")
-    st.subheader("Semantic Class Surface Area Distribution")
-    cols = st.columns(len(SemanticClass))
-    for idx, sc in enumerate(SemanticClass):
+    st.subheader("Semantic Class Surface Area Distribution (Mars Taxonomy)")
+    target_classes = list(MARS_TARGET_TAXONOMY)
+    cols = st.columns(len(target_classes))
+    for idx, sc in enumerate(target_classes):
         pct = seg_result.class_pixel_percentages.get(sc.value, 0.0)
-        color = SEMANTIC_COLOR_PALETTE[sc]
+        color = SEMANTIC_COLOR_PALETTE.get(sc, (128, 128, 128))
         hex_color = f"#{color[0]:02x}{color[1]:02x}{color[2]:02x}"
         with cols[idx]:
             st.markdown(
                 f"<div style='border-left: 4px solid {hex_color}; padding-left: 6px;'>"
                 f"<strong>{sc.value}</strong><br>"
-                f"<span style='font-size: 14px; font-family: monospace;'>{pct:.1f}%</span>"
+                f"<span style='font-size: 13px; font-family: monospace;'>{pct:.1f}%</span>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
