@@ -4,6 +4,7 @@ MARS-09 Odyssey Mission Control — FastAPI Backend Application.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 
 from backend.api.mission import router as mission_router
 from backend.api.navigation import router as navigation_router
@@ -28,6 +29,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Enable GZip compression for large DEM arrays
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Register route modules
 app.include_router(navigation_router)

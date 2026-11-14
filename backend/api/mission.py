@@ -56,10 +56,12 @@ def _safe_json_value(val: Any) -> Any:
 @router.get("")
 @router.get("/")
 def get_mission_data(
-    start_r: int = Query(default=2, ge=0),
-    start_c: int = Query(default=2, ge=0),
-    goal_r: int = Query(default=45, ge=0),
-    goal_c: int = Query(default=45, ge=0),
+    start_r: int = Query(default=5, ge=0),
+    start_c: int = Query(default=5, ge=0),
+    goal_r: int = Query(default=180, ge=0),
+    goal_c: int = Query(default=180, ge=0),
+    rows: int = Query(default=200, ge=20, le=400),
+    cols: int = Query(default=200, ge=20, le=400),
 ) -> Dict[str, Any]:
     """
     Standard Mission Data Endpoint (§7.1) bridging DEM elevation, cost map, and navigation comparison.
@@ -67,39 +69,40 @@ def get_mission_data(
     - np.inf -> 'Infinity' sentinel
     - nan -> 'NaN' sentinel
     """
-    cost_map, dem = get_default_terrain()
+    cost_map, dem = get_default_terrain(rows=rows, cols=cols)
     if cost_map.shape != dem.shape:
         raise HTTPException(
             status_code=400,
             detail=f"Grid mismatch: DEM {dem.shape}, cost map {cost_map.shape}",
         )
 
-    rows, cols = cost_map.shape
-    start = (int(start_r), int(start_c))
-    goal = (int(goal_r), int(goal_c))
+    r_count, c_count = cost_map.shape
+    start = (min(int(start_r), r_count - 1), min(int(start_c), c_count - 1))
+    goal = (min(int(goal_r), r_count - 1), min(int(goal_c), c_count - 1))
 
     res = compare_routes(cost_map, start, goal)
 
-    cost_matrix = [[_safe_cost(cost_map[r, c]) for c in range(cols)] for r in range(rows)]
+    cost_matrix = [[_safe_cost(cost_map[r, c]) for c in range(c_count)] for r in range(r_count)]
+    rounded_elevation = [[round(float(dem[r, c]), 2) for c in range(c_count)] for r in range(r_count)]
 
     return {
         "dem": {
-            "elevation": dem.tolist(),
-            "rows": rows,
-            "cols": cols,
+            "elevation": rounded_elevation,
+            "rows": r_count,
+            "cols": c_count,
             "elevationUnit": "meters",
-            "source": "HiRISE Jezero Crater DEM Benchmark",
+            "source": f"HiRISE Jezero-Valles {r_count}x{c_count} Multi-Hazard Sector",
             "bounds": {
                 "minRow": 0,
-                "maxRow": rows - 1,
+                "maxRow": r_count - 1,
                 "minCol": 0,
-                "maxCol": cols - 1,
+                "maxCol": c_count - 1,
             },
         },
         "cost_map": {
             "cost": cost_matrix,
-            "rows": rows,
-            "cols": cols,
+            "rows": r_count,
+            "cols": c_count,
         },
         "navigation": _safe_json_value(res),
     }

@@ -7,6 +7,7 @@ export class MarsRoverController {
     this.root = new THREE.Group();
     this.root.name = 'MarsRoverRoot';
     this.wheels = [];
+    this.wheelGroups = [];
     this.wheelRadius = 0.36;
     this.roverLength = 3.2;
     this.roverWidth = 2.2;
@@ -177,6 +178,7 @@ export class MarsRoverController {
 
       group.add(wheelGroup);
       this.wheels.push(wheelMesh);
+      this.wheelGroups.push(wheelGroup);
     });
 
     // 7. Tactical Headlight & Volumetric Forward SpotLight
@@ -223,9 +225,38 @@ export class MarsRoverController {
   }
 
   /**
-   * Kinematic ground alignment: sets world position, 4-point footprint pitch/roll, and rotates wheels.
+   * Articulated steering for rocker-bogie corner wheels
    */
-  updateKinematics(rFloat, cFloat, headingAngle, dem, rows, cols, minElev, elevScale, deltaDist = 0) {
+  steerWheels(steeringAngle = 0) {
+    if (this.wheelGroups.length >= 6) {
+      const clamped = Math.max(-0.45, Math.min(0.45, steeringAngle));
+      // Front Left & Front Right
+      this.wheelGroups[0].rotation.y = clamped;
+      this.wheelGroups[1].rotation.y = clamped;
+      // Rear Left & Rear Right (Counter-steer)
+      this.wheelGroups[4].rotation.y = -clamped * 0.65;
+      this.wheelGroups[5].rotation.y = -clamped * 0.65;
+    }
+  }
+
+  /**
+   * Kinematic ground alignment: sets world position, 4-point footprint pitch/roll,
+   * smooth quaternion damping, and rotates wheels.
+   */
+  updateKinematics(
+    rFloat,
+    cFloat,
+    headingAngle,
+    dem,
+    rows,
+    cols,
+    minElev,
+    elevScale,
+    deltaDist = 0,
+    dt = 0.016,
+    smooth = false,
+    steeringAngle = 0
+  ) {
     const offsetX = (cols - 1) / 2;
     const offsetZ = (rows - 1) / 2;
 
@@ -261,14 +292,28 @@ export class MarsRoverController {
     const pitch = Math.atan2((eFront - eRear) * elevScale, halfLen * 2.0);
     const roll = Math.atan2((eRight - eLeft) * elevScale, halfWidth * 2.0);
 
-    const worldY = (eCenter - minElev) * elevScale;
+    const targetY = (eCenter - minElev) * elevScale;
 
-    // Set position & rotations
-    this.root.position.set(worldX, worldY, worldZ);
-    this.root.rotation.set(0, 0, 0); // Reset
-    this.root.rotation.y = headingAngle;
-    this.root.rotation.x = pitch;
-    this.root.rotation.z = -roll;
+    if (smooth && dt > 0) {
+      // Butter-smooth continuous damping
+      this.root.position.x = worldX;
+      this.root.position.z = worldZ;
+      this.root.position.y = THREE.MathUtils.damp(this.root.position.y, targetY, 14.0, dt);
+
+      const targetEuler = new THREE.Euler(pitch, headingAngle, -roll, 'YXZ');
+      const targetQuat = new THREE.Quaternion().setFromEuler(targetEuler);
+      const dampingFactor = 1.0 - Math.exp(-12.0 * dt);
+      this.root.quaternion.slerp(targetQuat, dampingFactor);
+    } else {
+      this.root.position.set(worldX, targetY, worldZ);
+      this.root.rotation.set(0, 0, 0);
+      this.root.rotation.y = headingAngle;
+      this.root.rotation.x = pitch;
+      this.root.rotation.z = -roll;
+    }
+
+    // Steer front/rear bogies
+    this.steerWheels(steeringAngle);
 
     // Rotate wheels proportionally to linear motion
     if (deltaDist !== 0 && this.wheels.length > 0) {
@@ -280,7 +325,7 @@ export class MarsRoverController {
 
     return {
       worldX,
-      worldY,
+      worldY: this.root.position.y,
       worldZ,
       centerElev: eCenter,
       pitchDeg: THREE.MathUtils.radToDeg(pitch),
