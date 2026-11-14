@@ -13,6 +13,7 @@ import {
   Radio,
   Eye,
   Sliders,
+  Camera,
 } from 'lucide-react';
 
 import TerrainThreeMap from './components/three/TerrainThreeMap';
@@ -21,6 +22,7 @@ import RouteMetrics from './components/navigation/RouteMetrics';
 import RouteComparison from './components/navigation/RouteComparison';
 import Terrain3DMap from './components/terrain/Terrain3DMap';
 import TerrainControls from './components/terrain/TerrainControls';
+import VisionScoreDashboard from './components/visionscore/VisionScoreDashboard';
 
 import StatusChip from './components/shared/StatusChip';
 import ErrorBanner from './components/shared/ErrorBanner';
@@ -186,6 +188,13 @@ export default function App() {
             <Map size={13} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
             Topographic Analysis
           </button>
+          <button
+            className={`mc-view-btn ${activeView === 'visionscore' ? 'active' : ''}`}
+            onClick={() => setActiveView('visionscore')}
+          >
+            <Camera size={13} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+            VisionScore 2.0
+          </button>
         </div>
 
         {/* Global Mission Status */}
@@ -198,11 +207,19 @@ export default function App() {
       </header>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* MAIN VIEWPORT: 70% 3D Viewport / 30% Telemetry Stack          */}
       {/* ───────────────────────────────────────────────────────────── */}
-      <main className="mc-main-body">
-        {/* Left Column (70%): 3D Viewport */}
-        <section className="mc-viewport-area">
+      {/* MAIN VIEWPORT: VisionScore 2.0 OR Split 3D Terrain / Telemetry */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {activeView === 'visionscore' ? (
+        <main className="mc-main-body" style={{ display: 'block', overflow: 'hidden' }}>
+          <ErrorBoundary fallbackTitle="VisionScore 2.0 Subsystem Failure">
+            <VisionScoreDashboard />
+          </ErrorBoundary>
+        </main>
+      ) : (
+        <main className="mc-main-body">
+          {/* Left Column (70%): 3D Terrain Viewport */}
+          <section className="mc-viewport-area">
           {loading && !dem ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px' }}>
               <div className="mono" style={{ color: 'var(--rover)', fontSize: '13px', letterSpacing: '0.08em' }}>
@@ -295,6 +312,7 @@ export default function App() {
           <RouteComparison navigation={navigation} />
         </aside>
       </main>
+      )}
 
       {/* ───────────────────────────────────────────────────────────── */}
       {/* BOTTOM BAR: LEGEND, COORDINATE READOUT & DATA INTEGRITY       */}

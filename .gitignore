@@ -15,5 +15,6 @@ Thumbs.db
 node_modules/
 dist/
 .vite/
+outputs/obstacle_alerts/
 
 

@@ -360,12 +360,18 @@ class SimulatedCameraFeed(BaseCameraStream):
         resolution: Tuple[int, int] = (480, 640),
         seed: int = 42,
         environment: EnvironmentProfile = EnvironmentProfile.MARS,
+        inject_obstacle: bool = False,
     ):
         self.resolution = resolution  # (H, W)
         self.seed = seed
         self.environment = environment
+        self.inject_obstacle = inject_obstacle
         self._active = True
         self._frame_count = 0
+
+    def set_obstacle_injection(self, enable: bool = True) -> None:
+        """Dynamically enables or disables simulated prominent obstacle injection."""
+        self.inject_obstacle = enable
 
     def is_available(self) -> bool:
         return self._active
@@ -416,6 +422,15 @@ class SimulatedCameraFeed(BaseCameraStream):
             base_g = np.clip(140.0 + 30.0 * undulation, 0, 255)
             base_b = np.clip(120.0 + 25.0 * undulation, 0, 255)
 
+        # If prominent obstacle injection is enabled, add a large jagged obstacle formation
+        if self.inject_obstacle:
+            obs_dist = np.hypot(yy - 0.65, xx - 0.50)
+            obs_mask = obs_dist < 0.22
+            noise_tex = rng.normal(0, 45.0, (h, w))
+            base_r[obs_mask] = np.clip(35.0 + noise_tex[obs_mask], 0, 255)
+            base_g[obs_mask] = np.clip(30.0 + noise_tex[obs_mask], 0, 255)
+            base_b[obs_mask] = np.clip(25.0 + noise_tex[obs_mask], 0, 255)
+
         frame = np.stack([base_r, base_g, base_b], axis=-1).astype(np.uint8)
 
         meta = {
@@ -424,6 +439,7 @@ class SimulatedCameraFeed(BaseCameraStream):
             "simulated": True,
             "fov_deg": 65.0,
             "exposure_ms": 16.6,
+            "obstacle_injected": self.inject_obstacle,
         }
         return frame, meta
 
@@ -502,6 +518,23 @@ class CameraFrameSource:
             metadata=meta.to_dict(),
         )
 
+    def capture_and_detect(
+        self,
+        detector: Optional[Any] = None,
+        environment_override: Optional[EnvironmentProfile] = None,
+    ) -> Tuple[UnifiedImage, Optional[Any]]:
+        """
+        Captures a frame and evaluates it against the ObstacleEventDetector.
+        Returns (UnifiedImage, Optional[ObstacleAlert]).
+        """
+        frame = self.capture(environment_override=environment_override)
+        if detector is None:
+            from visionscore.obstacle_detector import get_obstacle_detector
+            detector = get_obstacle_detector()
+
+        alert = detector.process_frame(frame)
+        return frame, alert
+
 
 class ImageInputHandler:
     """
@@ -549,4 +582,36 @@ class ImageInputHandler:
     ) -> UnifiedImage:
         """Captures a frame from the configured camera stream."""
         return self.camera_source.capture(environment_override=environment_override)
+
+    def ingest(
+        self,
+        source: Union[UnifiedImage, np.ndarray, bytes, str, Path],
+        environment: Optional[EnvironmentProfile] = None,
+    ) -> UnifiedImage:
+        """Universal polymorphic ingestion entrypoint for any supported image input format."""
+        if isinstance(source, UnifiedImage):
+            return source
+        elif isinstance(source, np.ndarray):
+            return self.load_from_array(source, environment=environment)
+        elif isinstance(source, bytes):
+            return self.load_from_bytes(source, environment=environment)
+        elif isinstance(source, (str, Path)):
+            return self.load_from_path(source, environment=environment)
+        else:
+            raise InvalidImageError(f"Unsupported image input type: {type(source).__name__}")
+
+    def ingest_and_detect(
+        self,
+        source: Union[UnifiedImage, np.ndarray, bytes, str, Path],
+        detector: Optional[Any] = None,
+        environment: Optional[EnvironmentProfile] = None,
+    ) -> Tuple[UnifiedImage, Optional[Any]]:
+        """Polymorphic ingestion with automatic obstacle detection evaluation."""
+        image = self.ingest(source, environment=environment)
+        if detector is None:
+            from visionscore.obstacle_detector import get_obstacle_detector
+            detector = get_obstacle_detector()
+
+        alert = detector.process_frame(image)
+        return image, alert
 

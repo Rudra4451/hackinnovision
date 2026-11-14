@@ -25,6 +25,7 @@ from utils.helpers import validate_navigation_payload
 from components.terrain_map import render_terrain_map
 from components.mission_panel import render_mission_panel, render_navigation_metrics, render_mission_log
 from components.target_panel import render_target_panel
+from components.visionscore_panel import render_visionscore_panel
 
 st.set_page_config(
     page_title="ODYSSEY MARS-09 Mission Control",
@@ -131,10 +132,11 @@ render_mission_panel(telemetry, res)
 st.write("")
 
 # Tabs Interface
-tab_map, tab_nav, tab_science, tab_contracts = st.tabs([
+tab_map, tab_nav, tab_science, tab_visionscore, tab_contracts = st.tabs([
     "🗺️ Satellite Reconnaissance Feed",
     "🧭 Dual-Mode Route Telemetry",
     "🔬 Science Target Operations",
+    "👁️ VisionScore 2.0 & Obstacle Alerts",
     "📐 System Architecture & Contracts"
 ])
 
@@ -191,6 +193,9 @@ with tab_science:
         conf = top_target.get("confidence", 0.85)
         st.markdown(f"**Top Ranked Candidate:** `{top_target['id']}` ({top_target.get('type')})")
         st.progress(conf, text=f"Spectrometric Confidence Score: {conf * 100:.1f}%")
+
+with tab_visionscore:
+    render_visionscore_panel()
 
 with tab_contracts:
     st.subheader("Architectural Module Ownership & Interface Contracts")

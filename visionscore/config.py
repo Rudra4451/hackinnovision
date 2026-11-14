@@ -8,7 +8,8 @@ Notice:
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Dict, Tuple
+from pathlib import Path
+from typing import Dict, List, Optional, Set, Tuple
 
 
 class EnvironmentProfile(str, Enum):
@@ -32,6 +33,43 @@ class VisualTerrainClass(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class SemanticClass(str, Enum):
+    """
+    Pixel-level geological and surface semantic categories for VisionScore 2.0.
+    Kept strictly distinct from physical traversability classifications.
+    """
+    ROCK = "ROCK"
+    SAND = "SAND"
+    SOIL = "SOIL"
+    VEGETATION = "VEGETATION"
+    WATER = "WATER"
+    OBSTACLE = "OBSTACLE"
+    UNKNOWN = "UNKNOWN"
+
+
+# Consistent, publication-grade RGB color palette for semantic visualization
+SEMANTIC_COLOR_PALETTE: Dict[SemanticClass, Tuple[int, int, int]] = {
+    SemanticClass.ROCK: (128, 128, 128),       # Slate Gray (geological outcrops / boulders)
+    SemanticClass.SAND: (237, 201, 137),       # Ochre / Golden Sand (smooth Martian drifts)
+    SemanticClass.SOIL: (184, 80, 50),         # Martian Rust Red / Regolith
+    SemanticClass.VEGETATION: (46, 204, 113),  # Emerald Green (terrestrial / synthetic)
+    SemanticClass.WATER: (52, 152, 219),       # Cyan / Blue (terrestrial / synthetic)
+    SemanticClass.OBSTACLE: (231, 76, 60),     # Crimson Red (impassable crags, drop-offs, sharp rocks)
+    SemanticClass.UNKNOWN: (108, 52, 131),     # Deep Amethyst Violet (shadows, glare, unclassified)
+}
+
+# Mapping from semantic surface classes to candidate traversability tiers
+SEMANTIC_TRAVERSABILITY_MAP: Dict[SemanticClass, VisualTerrainClass] = {
+    SemanticClass.SAND: VisualTerrainClass.SAFE,
+    SemanticClass.SOIL: VisualTerrainClass.SAFE,
+    SemanticClass.ROCK: VisualTerrainClass.CAUTION,
+    SemanticClass.VEGETATION: VisualTerrainClass.CAUTION,
+    SemanticClass.WATER: VisualTerrainClass.HAZARD,
+    SemanticClass.OBSTACLE: VisualTerrainClass.HAZARD,
+    SemanticClass.UNKNOWN: VisualTerrainClass.UNKNOWN,
+}
+
+
 @dataclass(frozen=True)
 class EnvironmentParameters:
     """Optical and geological thresholds specific to an operational environment."""
@@ -42,6 +80,13 @@ class EnvironmentParameters:
     shadow_luminance_max: float    # Pixel luminance below which terrain is shadowed (UNKNOWN)
     saturation_luminance_min: float # Pixel luminance above which terrain is glare-saturated (UNKNOWN)
     description: str
+    supported_classes: Tuple[SemanticClass, ...] = (
+        SemanticClass.ROCK,
+        SemanticClass.SAND,
+        SemanticClass.SOIL,
+        SemanticClass.OBSTACLE,
+        SemanticClass.UNKNOWN,
+    )
 
 
 DEFAULT_ENVIRONMENT_PARAMETERS: Dict[EnvironmentProfile, EnvironmentParameters] = {
@@ -53,6 +98,13 @@ DEFAULT_ENVIRONMENT_PARAMETERS: Dict[EnvironmentProfile, EnvironmentParameters] 
         shadow_luminance_max=22.0,
         saturation_luminance_min=242.0,
         description="Martian surface profile: basaltic rock, ferric oxide dust, high-contrast shadows.",
+        supported_classes=(
+            SemanticClass.ROCK,
+            SemanticClass.SAND,
+            SemanticClass.SOIL,
+            SemanticClass.OBSTACLE,
+            SemanticClass.UNKNOWN,
+        ),
     ),
     EnvironmentProfile.EARTH: EnvironmentParameters(
         name="EARTH",
@@ -62,6 +114,15 @@ DEFAULT_ENVIRONMENT_PARAMETERS: Dict[EnvironmentProfile, EnvironmentParameters] 
         shadow_luminance_max=15.0,
         saturation_luminance_min=248.0,
         description="Terrestrial surface profile: standard daylight scattering, gravel, dirt, and varied albedo.",
+        supported_classes=(
+            SemanticClass.ROCK,
+            SemanticClass.SAND,
+            SemanticClass.SOIL,
+            SemanticClass.VEGETATION,
+            SemanticClass.WATER,
+            SemanticClass.OBSTACLE,
+            SemanticClass.UNKNOWN,
+        ),
     ),
     EnvironmentProfile.SIMULATION: EnvironmentParameters(
         name="SIMULATION",
@@ -71,8 +132,40 @@ DEFAULT_ENVIRONMENT_PARAMETERS: Dict[EnvironmentProfile, EnvironmentParameters] 
         shadow_luminance_max=20.0,
         saturation_luminance_min=245.0,
         description="Synthetic simulation profile: procedurally generated or rendered virtual landscapes.",
+        supported_classes=(
+            SemanticClass.ROCK,
+            SemanticClass.SAND,
+            SemanticClass.SOIL,
+            SemanticClass.VEGETATION,
+            SemanticClass.WATER,
+            SemanticClass.OBSTACLE,
+            SemanticClass.UNKNOWN,
+        ),
     ),
 }
+
+
+@dataclass
+class AlertConfig:
+    """
+    Configuration parameters for automatic obstacle image capture and alerts.
+
+    Attributes:
+        min_confidence: Minimum detection confidence to trigger an event alert [0.0 - 1.0].
+        min_obstacle_area_pct: Minimum percentage of image pixels occupied by obstacle to trigger.
+        cooldown_seconds: Minimum duration (seconds) before emitting another alert for a persistent obstacle.
+        dedup_similarity_threshold: Feature similarity threshold (0.0 - 1.0) for identifying identical obstacles.
+        storage_dir: Local filesystem directory where captured alert images are persisted.
+        max_stored_events: Maximum number of captured events to keep on disk before circular eviction.
+        auto_capture_enabled: Master switch for automatic capture on incoming frames.
+    """
+    min_confidence: float = 0.65
+    min_obstacle_area_pct: float = 2.5
+    cooldown_seconds: float = 5.0
+    dedup_similarity_threshold: float = 0.80
+    storage_dir: str = "outputs/obstacle_alerts"
+    max_stored_events: int = 50
+    auto_capture_enabled: bool = True
 
 
 @dataclass
@@ -93,6 +186,7 @@ class VisionConfig:
     min_input_dimension: int = 16
     analysis_grid_shape: Tuple[int, int] = (16, 16)
     overlay_alpha: float = 0.40
+    alert_config: AlertConfig = field(default_factory=AlertConfig)
     environment_params: Dict[EnvironmentProfile, EnvironmentParameters] = field(
         default_factory=lambda: dict(DEFAULT_ENVIRONMENT_PARAMETERS)
     )

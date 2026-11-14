@@ -17,7 +17,7 @@
 
 The MARS-09 Odyssey platform integrates core autonomous sub-systems:
 - **Member 2 — Terrain Intelligence (`terrain_intelligence/` & `core/terrain.py`):** 100x100 digital elevation models (DEM), central-difference slope and aspect analysis, Neyman-Scott spatial boulder clustering, 3-tier traversability classification, sensor epistemic uncertainty modeling, and traversability cost mapping.
-- **VisionScore Engine (`visionscore/`):** Visual Terrain Scoring & Explainability foundation with unified adapters for uploaded imagery and camera streams, multi-environment profiles (MARS, EARTH, SIMULATION), and replaceable terrain classification interface (`analyze_terrain`).
+- **VisionScore 2.0 Engine (`visionscore/`):** Semantic Terrain Segmentation & Automatic Obstacle Image Alerts with 7-class pixel classification (ROCK, SAND, SOIL, VEGETATION, WATER, OBSTACLE, UNKNOWN), automatic camera event capture, temporal cooldown deduplication, unmapped obstacle safety gating, and candidate path safety scoring.
 - **Integration Contract (`core/costmap.py`):** Standardized 2D NumPy float cost mapping ensuring seamless handoff between terrain perception and path planning.
 - **Member 3 — Autonomous Navigation (`core/navigation.py`):** 8-directional heuristic A* search, diagonal corner-cutting prevention, dual-mode routing (`shortest` vs. `safest`), multi-stop waypoint mission planning, and path telemetry metrics.
 - **Science Intelligence & React Dark HUD (`backend/` & `frontend/`):** FastAPI backend and real-time React telemetry dashboard for mission control, spectroscopic target classification, and Shannon entropy estimation.
@@ -121,3 +121,18 @@ pytest tests -v
 - **Interface Contract:** Verified via `tests/test_integration.py` ensuring exact nested schema keys (`safest.route.success`, `safest.route.x`, `summary.recommendation`).
 - **Defensive Error Handling:** Guaranteed via `validate_navigation_payload()` in `utils/helpers.py`.
 - **Display Standardization:** Plotly dark satellite projection maintaining 1:1 square grid cells (`scaleanchor="x"`).
+
+---
+
+## 6. VisionScore 2.0: Semantic Terrain Segmentation & Obstacle Image Alerts
+
+VisionScore 2.0 extends ODYSSEY with real-time visual perception, automated hazard detection, and mission-control explainability.
+
+### Key Capabilities
+- **Pixel-Level Semantic Segmentation (`segment_terrain`):** Classifies terrain images into 7 distinct surface categories: `ROCK`, `SAND`, `SOIL`, `VEGETATION`, `WATER`, `OBSTACLE`, and `UNKNOWN`.
+- **Strict Semantic vs. Traversability Separation:** Semantic surface classes map deterministically to traversability tiers (`SAFE`, `CAUTION`, `HAZARD`, `UNKNOWN`), ensuring geological understanding does not compromise rover safety constraints.
+- **Automated Event-Based Image Capture (`ObstacleEventDetector`):** Detects prominent obstacles in incoming camera feeds, captures the frame, generates unique event IDs (`EVT-YYYYMMDD-HHMMSS-xxxx`), persists diagnostic snapshots to managed local storage, and emits alerts to the dashboard.
+- **Cooldown Deduplication:** Suppresses repetitive alerts for the same persistent obstacle using spatial centroid tracking, feature signatures, and configurable cooldown windows.
+- **Multi-Environment Profiles (`MARS`, `EARTH`, `SIMULATION`):** Strictly enforces planetary atmospheric and geological rules (e.g. biological vegetation and liquid water are prohibited on Mars and tagged as anomalies/unknowns).
+- **DEM & Navigation Integration (`evaluate_candidate_path_safety`):** Evaluates candidate paths against visual detections and cost maps; immediately rejects paths traversing `np.inf` hazard cells. Uncalibrated visual obstacles are strictly reported as `UNMAPPED_VISUAL_OBSTACLE` without fabricating artificial coordinates.
+- **Mission Control UI:** Real-time visual monitoring available in both the React Dark Space HUD (`/api/visionscore/*`) and Streamlit Reconnaissance Console.
