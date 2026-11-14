@@ -58,6 +58,7 @@ from visionscore.analyzer import (
 from visionscore.semantic import (
     BaseSegmentationModel,
     DemoSemanticSegmentationModel,
+    TrainedSemanticSegmentationModel,
     SemanticSegmentationResult,
     segment_terrain,
 )
@@ -71,6 +72,17 @@ from visionscore.terrain_integration import (
     integrate_visual_obstacle,
 )
 from visionscore.results import VisualResults
+from visionscore.dataset import (
+    AI4MARS_DEFAULT_LABEL_MAP,
+    AI4MARS_IGNORE_INDEX,
+    AI4MarsDataset,
+    AI4MarsSample,
+    CorruptedDataError,
+    DatasetError,
+    DatasetSplitManifest,
+    MissingDataError,
+    remap_ai4mars_mask,
+)
 
 __version__ = "2.0.0"
 __all__ = [
@@ -116,6 +128,7 @@ __all__ = [
     # Semantic Segmentation
     "BaseSegmentationModel",
     "DemoSemanticSegmentationModel",
+    "TrainedSemanticSegmentationModel",
     "SemanticSegmentationResult",
     "segment_terrain",
     # Obstacle Detection & Alerts
@@ -127,4 +140,14 @@ __all__ = [
     "evaluate_candidate_path_safety",
     # Results Interface
     "VisualResults",
+    # Dataset Pipeline
+    "AI4MarsDataset",
+    "AI4MarsSample",
+    "DatasetSplitManifest",
+    "DatasetError",
+    "MissingDataError",
+    "CorruptedDataError",
+    "AI4MARS_DEFAULT_LABEL_MAP",
+    "AI4MARS_IGNORE_INDEX",
+    "remap_ai4mars_mask",
 ]

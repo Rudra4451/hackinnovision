@@ -17,5 +17,6 @@ dist/
 .vite/
 outputs/obstacle_alerts/
 outputs/visionscore/alerts/
+data/ai4mars/
 
 
