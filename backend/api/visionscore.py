@@ -186,16 +186,31 @@ def verify_alert_record(
     }
 
 
+@router.post("/alerts/clear")
+def clear_obstacle_alerts() -> Dict[str, Any]:
+    """Clears all in-memory obstacle alerts and resets the event tracker."""
+    detector = get_obstacle_detector()
+    detector.clear_alerts()
+    return {
+        "status": "CLEARED",
+        "message": "All obstacle event alerts cleared successfully",
+        "total_recorded": 0,
+    }
+
+
 @router.get("/camera/frame")
 def get_camera_frame(
     environment: str = Query(default="MARS"),
+    terrain_mode: Optional[str] = Query(default=None),
     include_segmentation: bool = Query(default=True),
 ) -> Dict[str, Any]:
     """
     Fetches the latest camera frame, performs obstacle detection,
-    and returns image data URI and telemetry.
+    and returns image data URI, segmentation color map, and risk telemetry.
     """
     env_profile = _resolve_environment(environment)
+    if terrain_mode:
+        _STREAM_SIMULATOR.set_terrain_mode(terrain_mode)
 
     unified_img = _INPUT_HANDLER.capture_frame(environment_override=env_profile)
 
@@ -210,6 +225,7 @@ def get_camera_frame(
         "image_id": unified_img.image_id,
         "timestamp": unified_img.timestamp,
         "environment": env_profile.value,
+        "terrain_mode": _STREAM_SIMULATOR.terrain_mode,
         "obstacle_injected": _STREAM_SIMULATOR.inject_obstacle,
         "alert_active": alert is not None,
         "frame_data_uri": _to_base64_data_uri(unified_img.image),
@@ -223,8 +239,22 @@ def get_camera_frame(
         payload["dominant_class"] = seg_result.dominant_class
         payload["class_percentages"] = seg_result.class_pixel_percentages
         payload["overlay_data_uri"] = _to_base64_data_uri(seg_result.overlay_image)
+        payload["color_map_data_uri"] = _to_base64_data_uri(seg_result.color_map)
+        payload["risk_assessment"] = seg_result.risk_assessment
 
     return payload
+
+
+@router.post("/camera/terrain")
+def set_simulated_terrain_mode(
+    mode: str = Query(default="MIXED", description="MIXED, SOIL, BEDROCK, SAND, BOULDER"),
+) -> Dict[str, Any]:
+    """Sets the terrain profile for the simulated camera feed."""
+    _STREAM_SIMULATOR.set_terrain_mode(mode)
+    return {
+        "terrain_mode": _STREAM_SIMULATOR.terrain_mode,
+        "message": f"Simulated camera terrain set to {_STREAM_SIMULATOR.terrain_mode}",
+    }
 
 
 @router.post("/camera/trigger")

@@ -64,6 +64,7 @@ class SemanticSegmentationResult:
         confidence_information: Mean confidence, per-class confidence, and uncertainty distribution.
         environment: Operational environment profile ('MARS', 'EARTH', 'SIMULATION').
         model_status: Provenance metadata documenting the active segmentation model and its limitations.
+        risk_assessment: Structured risk evaluation separating semantics, obstacles, and navigation safety.
     """
     segmentation_mask: np.ndarray
     color_map: np.ndarray
@@ -76,6 +77,7 @@ class SemanticSegmentationResult:
     confidence_information: Dict[str, Any]
     environment: str
     model_status: Dict[str, Any]
+    risk_assessment: Optional[Dict[str, Any]] = None
 
     def to_dict(self, include_arrays: bool = False) -> Dict[str, Any]:
         """Serializes segmentation results into a clean dictionary for APIs and telemetry."""
@@ -89,6 +91,7 @@ class SemanticSegmentationResult:
             "region_segments": self.region_segments[:10],  # Sample top 10 regions
             "model_status": self.model_status,
             "mask_shape": list(self.segmentation_mask.shape),
+            "risk_assessment": self.risk_assessment,
         }
         if include_arrays:
             payload["segmentation_mask"] = self.segmentation_mask.tolist()
@@ -220,61 +223,134 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
         texture_energy = 0.5 * grad_mag + 0.5 * local_std
 
         # 4. Pixel-Level Classification Assignment
-        # Full taxonomy mapping indices:
+        # Standardized AI4Mars NASA JPL benchmark label mapping:
+        # 0: SOIL, 1: BEDROCK, 2: SAND, 3: BOULDER, 255: IGNORE / UNKNOWN
         class_to_id: Dict[SemanticClass, int] = {
-            SemanticClass.ROCK: 0,
-            SemanticClass.SAND: 1,
-            SemanticClass.SOIL: 2,
-            SemanticClass.VEGETATION: 3,
-            SemanticClass.WATER: 4,
-            SemanticClass.OBSTACLE: 5,
-            SemanticClass.UNKNOWN: 6,
-            SemanticClass.BOULDER: 7,
-            SemanticClass.REGOLITH: 8,
-            SemanticClass.BEDROCK: 9,
-            SemanticClass.DUST: 10,
-            SemanticClass.CRATER: 11,
+            SemanticClass.SOIL: 0,        # AI4Mars Label 0
+            SemanticClass.BEDROCK: 1,     # AI4Mars Label 1
+            SemanticClass.SAND: 2,        # AI4Mars Label 2
+            SemanticClass.BOULDER: 3,     # AI4Mars Label 3
+            SemanticClass.UNKNOWN: 4,     # Epistemic UNKNOWN / AI4Mars 255
+            SemanticClass.ROCK: 5,        # Backward-compatible alias
+            SemanticClass.OBSTACLE: 6,    # Backward-compatible alias
+            SemanticClass.REGOLITH: 7,    # Extended planned
+            SemanticClass.DUST: 8,        # Extended planned
+            SemanticClass.CRATER: 9,      # Extended planned
+            SemanticClass.VEGETATION: 10, # Terrestrial / Sim
+            SemanticClass.WATER: 11,      # Terrestrial / Sim
         }
         id_to_class: Dict[int, str] = {idx: cls.value for cls, idx in class_to_id.items()}
+        id_to_class[255] = SemanticClass.UNKNOWN.value  # AI4Mars ignore label
 
-        # Initialize default surface mask to SAND
-        mask = np.full((h, w), class_to_id[SemanticClass.SAND], dtype=np.uint8)
-
-        # Apply Soil (higher oxidized redness, low-medium texture)
-        soil_mask = (redness_ratio >= env_params.expected_redness_ratio * 0.9) & (texture_energy < env_params.texture_caution_threshold)
-        mask[soil_mask] = class_to_id[SemanticClass.SOIL]
-
-        # Apply Rock (elevated texture energy)
-        rock_mask = (texture_energy >= env_params.texture_caution_threshold) & (texture_energy < env_params.texture_hazard_threshold)
-        mask[rock_mask] = class_to_id[SemanticClass.ROCK]
-
-        # Apply Obstacle / Boulder (severe texture energy / sharp boundary)
-        obstacle_mask = (texture_energy >= env_params.texture_hazard_threshold)
-        if image.environment in (EnvironmentProfile.EARTH, EnvironmentProfile.SIMULATION):
-            mask[obstacle_mask] = class_to_id[SemanticClass.OBSTACLE]
+        # Check if input is a raw AI4Mars single-channel ground-truth label mask
+        is_label_mask = (
+            getattr(image, "metadata", {}).get("is_label_mask", False)
+            if isinstance(getattr(image, "metadata", None), dict)
+            else False
+        )
+        is_ai4mars_labels = (
+            is_label_mask
+            or (rgb.ndim == 2 and set(np.unique(rgb)).issubset({0, 1, 2, 3, 255}))
+            or (
+                rgb.ndim == 3
+                and np.array_equal(rgb[:, :, 0], rgb[:, :, 1])
+                and np.array_equal(rgb[:, :, 0], rgb[:, :, 2])
+                and set(np.unique(rgb[:, :, 0])).issubset({0, 1, 2, 3, 255})
+            )
+        )
+        if is_ai4mars_labels:
+            # Direct decoding of genuine AI4Mars dataset label mask
+            raw_mask = rgb if rgb.ndim == 2 else rgb[:, :, 0]
+            mask = np.full((h, w), class_to_id[SemanticClass.UNKNOWN], dtype=np.uint8)
+            mask[raw_mask == 0] = class_to_id[SemanticClass.SOIL]
+            mask[raw_mask == 1] = class_to_id[SemanticClass.BEDROCK]
+            mask[raw_mask == 2] = class_to_id[SemanticClass.SAND]
+            mask[raw_mask == 3] = class_to_id[SemanticClass.BOULDER]
+            # Label 255 is IGNORE -> strictly remains UNKNOWN (never becomes a terrain class)
         else:
-            mask[obstacle_mask] = class_to_id[SemanticClass.BOULDER]
+            # Deterministic Optical & Texture Segmentation across all 4 AI4Mars classes + Unknown
+            # 1. Default background surface: cohesive Martian soil
+            mask = np.full((h, w), class_to_id[SemanticClass.SOIL], dtype=np.uint8)
 
-        # Environmental Adaptation Logic:
-        # On Earth/Simulation: Support Vegetation and Water
-        if image.environment in (EnvironmentProfile.EARTH, EnvironmentProfile.SIMULATION):
-            veg_mask = (green_excess > 20.0) & (g_channel > r_channel) & (g_channel > b_channel) & (texture_energy < env_params.texture_hazard_threshold)
-            mask[veg_mask] = class_to_id[SemanticClass.VEGETATION]
+            # 2. BEDROCK (AI4Mars 1): Solid basaltic/silicate rock pavement with low ferric redness, balanced R-G channels
+            bedrock_mask = (
+                (redness_ratio < 0.22)
+                & (np.abs(r_channel - g_channel) < 30.0)
+                & (texture_energy < 22.0)
+                & (luminance > 45.0)
+                & (luminance < 200.0)
+            )
+            mask[bedrock_mask] = class_to_id[SemanticClass.BEDROCK]
 
-            water_mask = (blue_excess > 15.0) & (b_channel > r_channel) & (texture_energy < 8.0) & (luminance > 25.0)
-            mask[water_mask] = class_to_id[SemanticClass.WATER]
-        else:
-            # On Mars: Biological vegetation and surface liquid water are climatologically invalid.
-            # If high green/blue excess appears, flag as UNKNOWN (anomalous feature/sensor glare).
-            mars_anomaly = ((green_excess > 25.0) | (blue_excess > 25.0)) & ~obstacle_mask
-            mask[mars_anomaly] = class_to_id[SemanticClass.UNKNOWN]
+            # 3. SAND (AI4Mars 2): Golden/ochre albedo, medium redness, high green-to-red ratio (yellowish), smooth/rippled texture
+            sand_mask = (
+                (redness_ratio >= 0.18)
+                & (redness_ratio < 0.48)
+                & (g_channel > 0.65 * r_channel)
+                & (g_channel > b_channel * 1.20)
+                & (texture_energy < 14.0)
+                & (luminance > 60.0)
+                & ~bedrock_mask
+            )
+            mask[sand_mask] = class_to_id[SemanticClass.SAND]
 
-        # Apply UNKNOWN to extreme illumination (pitch shadows or glare saturation)
-        unknown_illumination = (luminance <= env_params.shadow_luminance_max) | (luminance >= env_params.saturation_luminance_min)
-        mask[unknown_illumination] = class_to_id[SemanticClass.UNKNOWN]
+            # 4. SOIL (AI4Mars 0): Cohesive oxidized regolith with high redness ratio, reddish hue, and low-medium texture
+            soil_mask = (
+                (redness_ratio >= 0.25)
+                & (g_channel <= 0.65 * r_channel)
+                & (texture_energy < env_params.texture_caution_threshold)
+                & ~bedrock_mask
+                & ~sand_mask
+            )
+            mask[soil_mask] = class_to_id[SemanticClass.SOIL]
 
-        # 5. Morphological Spatial Smoothing (3x3 median filter to eliminate salt-and-pepper noise)
-        mask = ndimage.median_filter(mask, size=3)
+            # 5. BOULDER (AI4Mars 3): High spatial gradient contrast, sharp boundary, or severe texture hazard
+            obstacle_mask = (texture_energy >= env_params.texture_hazard_threshold) | (grad_mag >= 16.0)
+            if image.environment in (EnvironmentProfile.EARTH, EnvironmentProfile.SIMULATION):
+                mask[obstacle_mask] = class_to_id[SemanticClass.OBSTACLE]
+            else:
+                mask[obstacle_mask] = class_to_id[SemanticClass.BOULDER]
+
+            # 6. ROCK (Legacy / Scree): Moderate texture energy below hazard threshold
+            rock_mask = (
+                (texture_energy >= env_params.texture_caution_threshold)
+                & (texture_energy < env_params.texture_hazard_threshold)
+                & ~bedrock_mask
+                & ~obstacle_mask
+            )
+            mask[rock_mask] = class_to_id[SemanticClass.ROCK]
+
+            # 7. Environmental Adaptation Logic (Earth vs Mars)
+            if image.environment in (EnvironmentProfile.EARTH, EnvironmentProfile.SIMULATION):
+                veg_mask = (
+                    (green_excess > 20.0)
+                    & (g_channel > r_channel)
+                    & (g_channel > b_channel)
+                    & (texture_energy < env_params.texture_hazard_threshold)
+                )
+                mask[veg_mask] = class_to_id[SemanticClass.VEGETATION]
+
+                water_mask = (
+                    (blue_excess > 15.0)
+                    & (b_channel > r_channel)
+                    & (texture_energy < 8.0)
+                    & (luminance > 25.0)
+                )
+                mask[water_mask] = class_to_id[SemanticClass.WATER]
+            else:
+                # Mars: Biological vegetation and liquid water are climatologically invalid -> UNKNOWN anomaly
+                mars_anomaly = ((green_excess > 25.0) | (blue_excess > 25.0)) & ~obstacle_mask
+                mask[mars_anomaly] = class_to_id[SemanticClass.UNKNOWN]
+
+            # 8. UNKNOWN for extreme illumination (pitch shadows or specular glare)
+            unknown_illumination = (
+                (luminance <= env_params.shadow_luminance_max)
+                | (luminance >= env_params.saturation_luminance_min)
+            )
+            mask[unknown_illumination] = class_to_id[SemanticClass.UNKNOWN]
+
+            # 9. Morphological Spatial Smoothing (3x3 median filter eliminates noise)
+            mask = ndimage.median_filter(mask, size=3)
 
         # 6. Generate Color-Coded Map (RGB)
         color_map = np.zeros((h, w, 3), dtype=np.uint8)
@@ -362,7 +438,119 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
             "model_transparency": "Demo heuristic - not neural network inference",
         }
 
-        # 12. Model Status Metadata
+        # 12. Structured Terrain Risk Assessment (§Phase E)
+        corridor_min_c = int(0.25 * w)
+        corridor_max_c = int(0.75 * w)
+        corridor_min_r = int(0.40 * h)
+
+        corridor_obstacles = []
+        for r in region_segments:
+            if r.get("semantic_class") in (SemanticClass.BOULDER.value, SemanticClass.OBSTACLE.value, SemanticClass.ROCK.value):
+                c_r, c_c = r.get("centroid", (0, 0))
+                if corridor_min_r <= c_r and corridor_min_c <= c_c <= corridor_max_c:
+                    corridor_obstacles.append(r)
+
+        max_corridor_area_pct = max([o["area_percentage"] for o in corridor_obstacles], default=0.0)
+        total_boulder_pct = class_percentages.get(SemanticClass.BOULDER.value, 0.0) + class_percentages.get(SemanticClass.OBSTACLE.value, 0.0)
+
+        if max_corridor_area_pct >= 8.0 or total_boulder_pct >= 15.0:
+            risk_status = "CRITICAL"
+            risk_level = "HAZARD"
+            risk_score = min(1.0, 0.80 + max_corridor_area_pct / 50.0)
+            evidence = [
+                f"Severe boulder hazard ({max_corridor_area_pct:.1f}% area) directly blocks rover corridor",
+                "High mechanical rollover and chassis collision probability",
+                f"Detection confidence: {mean_confidence:.2f}",
+            ]
+            explanation = "Critical obstacle detected blocking primary travel corridor. Immediate stop and autonomous rerouting required."
+            recommended_action = "IMMEDIATE_STOP_AND_REROUTE"
+            in_corridor = True
+
+        elif max_corridor_area_pct >= 3.0 or total_boulder_pct >= 5.0:
+            risk_status = "HIGH RISK"
+            risk_level = "HIGH RISK"
+            risk_score = 0.65
+            evidence = [
+                f"Prominent obstacle candidate ({max_corridor_area_pct:.1f}% area) in approach corridor",
+                "Wheel entrapment and undercarriage clearance reduction",
+            ]
+            explanation = "High-risk morphological formation in approach corridor. Local avoidance path recommended."
+            recommended_action = "REPLAN_REQUIRED"
+            in_corridor = True
+
+        elif max_corridor_area_pct >= 1.0 or (corridor_obstacles and total_boulder_pct >= 2.0):
+            risk_status = "POTENTIAL HAZARD"
+            risk_level = "CAUTION"
+            risk_score = 0.40
+            evidence = [
+                f"Moderate boulder candidate ({max_corridor_area_pct:.1f}% area) within corridor bounds",
+                "Requires speed reduction and steer-angle monitoring",
+            ]
+            explanation = "Moderate rock obstacle identified in path. Slow down to 2.5 cm/s and monitor clearances."
+            recommended_action = "CAUTION_SPEED_REDUCTION"
+            in_corridor = True
+
+        elif total_boulder_pct > 0.5:
+            risk_status = "DETECTED"
+            risk_level = "LOW RISK"
+            risk_score = 0.20
+            evidence = [
+                f"Peripheral boulders detected ({total_boulder_pct:.1f}% total scene coverage)",
+                "Cleared from central travel corridor",
+            ]
+            explanation = "Peripheral rock formations detected outside rover travel corridor. Nominal clearance maintained."
+            recommended_action = "MONITOR_PERIPHERY"
+            in_corridor = False
+
+        elif class_percentages.get(SemanticClass.SAND.value, 0.0) >= 30.0:
+            risk_status = "DETECTED"
+            risk_level = "CAUTION"
+            risk_score = 0.30
+            evidence = [
+                f"Aeolian sand dune coverage: {class_percentages.get(SemanticClass.SAND.value, 0.0):.1f}%",
+                "Moderate wheel slip and sinkage risk",
+            ]
+            explanation = "Extensive loose sand sheets observed. Apply wheel traction control and slip compensation."
+            recommended_action = "SLIP_COMPENSATION_ACTIVE"
+            in_corridor = False
+
+        elif class_percentages.get(SemanticClass.UNKNOWN.value, 0.0) >= 25.0:
+            risk_status = "UNKNOWN"
+            risk_level = "UNKNOWN"
+            risk_score = 0.50
+            evidence = [
+                f"High optical shadow/glare fraction ({class_percentages.get(SemanticClass.UNKNOWN.value, 0.0):.1f}%)",
+                "Degraded sensor perception corridor",
+            ]
+            explanation = "Corridor visibility obscured by extreme shadow or specular saturation. Hold position until lighting stabilizes."
+            recommended_action = "SENSOR_VERIFICATION_HOLD"
+            in_corridor = False
+
+        else:
+            risk_status = "NOT DETECTED"
+            risk_level = "SAFE"
+            risk_score = 0.05
+            evidence = [
+                f"Cohesive bedrock ({class_percentages.get(SemanticClass.BEDROCK.value, 0.0):.1f}%) and soil ({class_percentages.get(SemanticClass.SOIL.value, 0.0):.1f}%)",
+                "No hazardous boulders or corridor obstructions detected",
+            ]
+            explanation = "Nominal surface conditions. High-traction bedrock and cohesive soil provide safe traversal."
+            recommended_action = "PROCEED_NOMINAL"
+            in_corridor = False
+
+        risk_assessment = {
+            "status": risk_status,
+            "risk_level": risk_level,
+            "risk_score": round(risk_score, 3),
+            "evidence": evidence,
+            "explanation": explanation,
+            "confidence": round(mean_confidence, 4),
+            "source": "Optical Texture & Chromaticity Segmentation (AI4Mars/PSM-TCS v2.0)",
+            "in_travel_corridor": in_corridor,
+            "recommended_action": recommended_action,
+        }
+
+        # 13. Model Status Metadata
         model_status: Dict[str, Any] = {
             "model_name": self.model_name,
             "is_real_ai_model": self.is_real_ai_model,
@@ -374,9 +562,8 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
             "unsupported_extended_classes": [c.value for c in EXTENDED_PLANNED_CLASSES],
             "input_resolution": f"{w}x{h}",
             "limitations": (
-                "Algorithmic optical baseline. Evaluates multi-band chromaticity and spatial gradient texture. "
-                "Classifies ROCK, BOULDER, SAND, SOIL, and UNKNOWN. Does not distinguish REGOLITH, BEDROCK, "
-                "DUST, or CRATER without 3D DEM elevation or trained deep-learning neural network weights (e.g. AI4Mars). "
+                "Algorithmic optical baseline with AI4Mars 4-class surface taxonomy (SOIL, BEDROCK, SAND, BOULDER, and UNKNOWN). "
+                "Does not distinguish REGOLITH, DUST, or CRATER without 3D DEM elevation or fine-tuned deep-learning neural network weights (e.g. AI4Mars). "
                 "Pluggable via BaseSegmentationModel."
             ),
         }
@@ -393,6 +580,7 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
             confidence_information=confidence_info,
             environment=image.environment.value,
             model_status=model_status,
+            risk_assessment=risk_assessment,
         )
 
 

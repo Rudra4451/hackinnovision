@@ -361,17 +361,23 @@ class SimulatedCameraFeed(BaseCameraStream):
         seed: int = 42,
         environment: EnvironmentProfile = EnvironmentProfile.MARS,
         inject_obstacle: bool = False,
+        terrain_mode: str = "MIXED",
     ):
         self.resolution = resolution  # (H, W)
         self.seed = seed
         self.environment = environment
         self.inject_obstacle = inject_obstacle
+        self.terrain_mode = terrain_mode.upper()
         self._active = True
         self._frame_count = 0
 
     def set_obstacle_injection(self, enable: bool = True) -> None:
         """Dynamically enables or disables simulated prominent obstacle injection."""
         self.inject_obstacle = enable
+
+    def set_terrain_mode(self, mode: str = "MIXED") -> None:
+        """Sets the simulated terrain profile: 'MIXED', 'SOIL', 'BEDROCK', 'SAND', 'BOULDER'."""
+        self.terrain_mode = mode.upper()
 
     def is_available(self) -> bool:
         return self._active
@@ -399,17 +405,73 @@ class SimulatedCameraFeed(BaseCameraStream):
         )
 
         if self.environment in (EnvironmentProfile.MARS, EnvironmentProfile.SIMULATION_MARS):
-            # Base Martian ochre chromaticity (high Red, low Blue)
-            base_r = np.clip(185.0 + 40.0 * undulation, 0, 255)
-            base_g = np.clip(95.0 + 30.0 * undulation, 0, 255)
-            base_b = np.clip(55.0 + 20.0 * undulation, 0, 255)
+            mode = self.terrain_mode
 
-            # Add dark basaltic rock cluster at bottom right
-            boulder_dist = np.hypot(yy - 0.75, xx - 0.70)
-            boulder_mask = boulder_dist < 0.12
-            base_r[boulder_mask] = np.clip(55.0 + rng.normal(0, 5, np.sum(boulder_mask)), 0, 255)
-            base_g[boulder_mask] = np.clip(45.0 + rng.normal(0, 5, np.sum(boulder_mask)), 0, 255)
-            base_b[boulder_mask] = np.clip(40.0 + rng.normal(0, 5, np.sum(boulder_mask)), 0, 255)
+            if mode == "SOIL":
+                # Pure Martian ferric oxide cohesive soil plain
+                base_r = np.clip(185.0 + 35.0 * undulation, 0, 255)
+                base_g = np.clip(95.0 + 25.0 * undulation, 0, 255)
+                base_b = np.clip(55.0 + 15.0 * undulation, 0, 255)
+
+            elif mode == "BEDROCK":
+                # Solid exposed basaltic/silicate bedrock pavement
+                base_r = np.clip(114.0 + 20.0 * undulation, 0, 255)
+                base_g = np.clip(116.0 + 20.0 * undulation, 0, 255)
+                base_b = np.clip(120.0 + 20.0 * undulation, 0, 255)
+                # Planar fractures and joint lines
+                fractures = (np.sin(xx * 25.0 + yy * 15.0) > 0.94) | (np.sin(yy * 22.0 - xx * 18.0) > 0.95)
+                base_r[fractures] = np.clip(base_r[fractures] - 35.0, 0, 255)
+                base_g[fractures] = np.clip(base_g[fractures] - 35.0, 0, 255)
+                base_b[fractures] = np.clip(base_b[fractures] - 35.0, 0, 255)
+
+            elif mode == "SAND":
+                # Aeolian sand dune field with ripple wave patterns
+                ripples = 0.20 * np.sin(xx * 40.0 + yy * 25.0) + 0.10 * np.sin(xx * 80.0)
+                base_r = np.clip(205.0 + 25.0 * (undulation + ripples), 0, 255)
+                base_g = np.clip(155.0 + 20.0 * (undulation + ripples), 0, 255)
+                base_b = np.clip(85.0 + 15.0 * (undulation + ripples), 0, 255)
+
+            elif mode == "BOULDER":
+                # Rocky terrain with scattered boulders and scree
+                base_r = np.clip(155.0 + 30.0 * undulation, 0, 255)
+                base_g = np.clip(100.0 + 25.0 * undulation, 0, 255)
+                base_b = np.clip(65.0 + 20.0 * undulation, 0, 255)
+                # Multiple boulder clusters with sharp gradient relief
+                for c_y, c_x, radius in [(0.65, 0.45, 0.16), (0.75, 0.72, 0.12), (0.50, 0.30, 0.10)]:
+                    b_dist = np.hypot(yy - c_y, xx - c_x)
+                    b_mask = b_dist < radius
+                    b_noise = rng.normal(0, 40.0, (h, w))
+                    base_r[b_mask] = np.clip(45.0 + b_noise[b_mask], 0, 255)
+                    base_g[b_mask] = np.clip(40.0 + b_noise[b_mask], 0, 255)
+                    base_b[b_mask] = np.clip(35.0 + b_noise[b_mask], 0, 255)
+
+            else:
+                # MIXED (Default): Composite Mars scene with all 4 AI4Mars classes
+                # Base: Ferric Martian soil
+                base_r = np.clip(185.0 + 35.0 * undulation, 0, 255)
+                base_g = np.clip(95.0 + 25.0 * undulation, 0, 255)
+                base_b = np.clip(55.0 + 15.0 * undulation, 0, 255)
+
+                # Bedrock shelf on left: solid gray rock pavement (low redness)
+                bedrock_shelf = (xx < 0.42) & (yy > 0.35)
+                base_r[bedrock_shelf] = np.clip(114.0 + 18.0 * undulation[bedrock_shelf], 0, 255)
+                base_g[bedrock_shelf] = np.clip(116.0 + 18.0 * undulation[bedrock_shelf], 0, 255)
+                base_b[bedrock_shelf] = np.clip(120.0 + 18.0 * undulation[bedrock_shelf], 0, 255)
+
+                # Sand ripples on right: golden/ochre aeolian dunes
+                sand_patch = (xx > 0.52) & (yy > 0.25) & (yy < 0.75)
+                ripples = 0.20 * np.sin(xx * 40.0 + yy * 25.0)
+                base_r[sand_patch] = np.clip(205.0 + 25.0 * (undulation[sand_patch] + ripples[sand_patch]), 0, 255)
+                base_g[sand_patch] = np.clip(155.0 + 20.0 * (undulation[sand_patch] + ripples[sand_patch]), 0, 255)
+                base_b[sand_patch] = np.clip(85.0 + 15.0 * (undulation[sand_patch] + ripples[sand_patch]), 0, 255)
+
+                # Basaltic boulder cluster at bottom right
+                boulder_dist = np.hypot(yy - 0.75, xx - 0.70)
+                boulder_mask = boulder_dist < 0.13
+                b_noise = rng.normal(0, 38.0, (h, w))
+                base_r[boulder_mask] = np.clip(48.0 + b_noise[boulder_mask], 0, 255)
+                base_g[boulder_mask] = np.clip(42.0 + b_noise[boulder_mask], 0, 255)
+                base_b[boulder_mask] = np.clip(38.0 + b_noise[boulder_mask], 0, 255)
 
         elif self.environment == EnvironmentProfile.EARTH:
             # Earth regolith / gravel mix
@@ -445,6 +507,7 @@ class SimulatedCameraFeed(BaseCameraStream):
             "fov_deg": 65.0,
             "exposure_ms": 16.6,
             "obstacle_injected": self.inject_obstacle,
+            "terrain_mode": self.terrain_mode,
         }
         return frame, meta
 

@@ -95,23 +95,64 @@ MARS_TARGET_TAXONOMY: Tuple[SemanticClass, ...] = (
     SemanticClass.UNKNOWN,
 )
 
-# Classes recognized by the baseline optical heuristic model (PSM-TCS v2.0)
-HEURISTIC_RECOGNIZED_CLASSES: Tuple[SemanticClass, ...] = (
-    SemanticClass.ROCK,
-    SemanticClass.BOULDER,
-    SemanticClass.SAND,
+# AI4Mars Official NASA JPL Benchmark Dataset Label Mapping
+# Label 0: SOIL (oxidized Martian surface plains and cohesive ground)
+# Label 1: BEDROCK (exposed solid rock pavement and consolidated basement strata)
+# Label 2: SAND (aeolian sand sheets, dune fields, and fine rippled deposits)
+# Label 3: BOULDER (large rock hazards and morphological obstacles)
+# Label 255: IGNORE (sky, rover chassis/hardware, shadow voids, extreme glare saturation)
+AI4MARS_LABEL_MAP: Dict[int, SemanticClass] = {
+    0: SemanticClass.SOIL,
+    1: SemanticClass.BEDROCK,
+    2: SemanticClass.SAND,
+    3: SemanticClass.BOULDER,
+    255: SemanticClass.UNKNOWN,
+}
+
+AI4MARS_CLASS_TO_LABEL: Dict[SemanticClass, int] = {
+    SemanticClass.SOIL: 0,
+    SemanticClass.BEDROCK: 1,
+    SemanticClass.SAND: 2,
+    SemanticClass.BOULDER: 3,
+    SemanticClass.UNKNOWN: 255,
+}
+
+# The 4 primary surface classes trained in AI4Mars (+ UNKNOWN/IGNORE)
+AI4MARS_PRIMARY_CLASSES: Tuple[SemanticClass, ...] = (
     SemanticClass.SOIL,
+    SemanticClass.BEDROCK,
+    SemanticClass.SAND,
+    SemanticClass.BOULDER,
+)
+
+# Classes recognized by the active perception pipeline (PSM-TCS v2.0 + AI4Mars Decoders)
+HEURISTIC_RECOGNIZED_CLASSES: Tuple[SemanticClass, ...] = (
+    SemanticClass.SOIL,
+    SemanticClass.BEDROCK,
+    SemanticClass.SAND,
+    SemanticClass.BOULDER,
+    SemanticClass.ROCK,
     SemanticClass.OBSTACLE,
     SemanticClass.UNKNOWN,
 )
 
-# Extended classes defined in taxonomy for AI4Mars deep-learning integration
+# Extended classes defined in taxonomy for planned deep-learning models
 EXTENDED_PLANNED_CLASSES: Tuple[SemanticClass, ...] = (
     SemanticClass.REGOLITH,
     SemanticClass.BEDROCK,
     SemanticClass.DUST,
     SemanticClass.CRATER,
 )
+
+
+class RiskStatus(str, Enum):
+    """Standardized risk status labels for terrain hazard evaluation."""
+    NOT_DETECTED = "NOT DETECTED"
+    DETECTED = "DETECTED"
+    POTENTIAL_HAZARD = "POTENTIAL HAZARD"
+    HIGH_RISK = "HIGH RISK"
+    CRITICAL = "CRITICAL"
+    UNKNOWN = "UNKNOWN"
 
 
 # Consistent, publication-grade RGB color palette for semantic visualization

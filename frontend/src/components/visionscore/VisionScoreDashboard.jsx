@@ -14,31 +14,41 @@ import {
   Sliders,
   Clock,
   Sparkles,
+  Download,
+  RotateCcw,
+  Compass,
+  Filter,
+  Trash2,
+  Columns,
 } from 'lucide-react';
 import axios from 'axios';
 
 const BACKEND_BASE = 'http://127.0.0.1:8000';
 
-// Mars-Only Operational Taxonomy (Active Heuristic vs Planned Deep Learning)
+// Mars AI4Mars NASA JPL Benchmark Taxonomy (Active Supported vs Planned Models)
 const SEMANTIC_CLASSES = [
-  { name: 'ROCK', color: '#808080', desc: 'Outcrops & scree', active: true },
-  { name: 'BOULDER', color: '#4B5563', desc: 'Large rock hazards', active: true },
-  { name: 'SAND', color: '#EDC989', desc: 'Dunes & aeolian ripples', active: true },
-  { name: 'REGOLITH', color: '#C2410C', desc: 'Weathered rocky mantle (Extended)', active: false },
-  { name: 'SOIL', color: '#B85032', desc: 'Martian oxidized regolith', active: true },
-  { name: 'BEDROCK', color: '#6B7280', desc: 'Firm exposed pavement (Extended)', active: false },
-  { name: 'DUST', color: '#F59E0B', desc: 'Fine aeolian mantling (Extended)', active: false },
-  { name: 'CRATER', color: '#431407', desc: 'Impact rim / depression (Extended)', active: false },
-  { name: 'UNKNOWN', color: '#6C3483', desc: 'Shadows / glare / unclassified', active: true },
+  { name: 'SOIL', labelId: 0, color: '#B85032', desc: 'Oxidized regolith plains & cohesive soil', active: true, traction: 'Nominal (Safe)' },
+  { name: 'BEDROCK', labelId: 1, color: '#6B7280', desc: 'Solid exposed rock pavement & basement strata', active: true, traction: 'High (Safe)' },
+  { name: 'SAND', labelId: 2, color: '#EDC989', desc: 'Aeolian dunes, ripples & drift sheets', active: true, traction: 'Low (Slip Risk)' },
+  { name: 'BOULDER', labelId: 3, color: '#4B5563', desc: 'Large discrete rock hazards & morphological blocks', active: true, traction: 'Hazard (Collision)' },
+  { name: 'UNKNOWN', labelId: 255, color: '#6C3483', desc: 'Shadows / glare / unclassified regions', active: true, traction: 'Uncertain' },
+  { name: 'REGOLITH', labelId: null, color: '#C2410C', desc: 'Weathered mantle (Planned model)', active: false, traction: 'Planned' },
+  { name: 'DUST', labelId: null, color: '#F59E0B', desc: 'Fine atmospheric fallout mantle (Planned)', active: false, traction: 'Planned' },
+  { name: 'CRATER', labelId: null, color: '#431407', desc: 'Impact rim & depression walls (Planned)', active: false, traction: 'Planned' },
 ];
 
 export default function VisionScoreDashboard() {
   const [environment, setEnvironment] = useState('MARS');
-  const [viewMode, setViewMode] = useState('overlay'); // 'overlay' | 'frame' | 'mask' | 'side-by-side'
+  const [terrainMode, setTerrainMode] = useState('MIXED'); // 'MIXED' | 'SOIL' | 'BEDROCK' | 'SAND' | 'BOULDER'
+  const [viewMode, setViewMode] = useState('overlay'); // 'overlay' | 'mask' | 'frame' | 'side-by-side'
   const [isStreaming, setIsStreaming] = useState(true);
   const [isInjectingObstacle, setIsInjectingObstacle] = useState(false);
+  const [hazardFilterOnly, setHazardFilterOnly] = useState(false);
+  const [selectedTerrainFilter, setSelectedTerrainFilter] = useState('ALL'); // 'ALL' | 'SOIL' | 'BEDROCK' | 'SAND' | 'BOULDER' | 'UNKNOWN'
+  const [alertStatusFilter, setAlertStatusFilter] = useState('ALL'); // 'ALL' | 'UNVERIFIED' | 'CONFIRMED' | 'FALSE_POSITIVE'
+
   const [currentFrameData, setCurrentFrameData] = useState(null);
-  const [segmentationData, setSegmentationData] = useState(null);
+  const [isUploadedImage, setIsUploadedImage] = useState(false);
   const [alerts, setAlerts] = useState([]);
   const [selectedAlert, setSelectedAlert] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -49,30 +59,34 @@ export default function VisionScoreDashboard() {
 
   // 1. Fetch Latest Camera Frame & Run Detection
   const fetchCameraFrame = useCallback(async () => {
+    if (isUploadedImage) return; // Do not overwrite user-uploaded image during live polling
+
     try {
       const res = await axios.get(`${BACKEND_BASE}/api/visionscore/camera/frame`, {
-        params: { environment, include_segmentation: true },
+        params: { environment, terrain_mode: terrainMode, include_segmentation: true },
         timeout: 4000,
       });
       setCurrentFrameData(res.data);
       if (res.data.alert) {
-        // Refresh alerts feed on new alert
         fetchAlerts();
       }
       setErrorMessage(null);
     } catch (err) {
-      // Fallback message if backend isn't actively running
       if (!errorMessage) {
         setErrorMessage('Connecting to VisionScore 2.0 backend on :8000...');
       }
     }
-  }, [environment, errorMessage]);
+  }, [environment, terrainMode, isUploadedImage, errorMessage]);
 
   // 2. Fetch Alerts List
   const fetchAlerts = useCallback(async () => {
     try {
+      const params = { limit: 30 };
+      if (alertStatusFilter !== 'ALL') {
+        params.status = alertStatusFilter;
+      }
       const res = await axios.get(`${BACKEND_BASE}/api/visionscore/alerts`, {
-        params: { limit: 20 },
+        params,
         timeout: 3000,
       });
       setAlerts(res.data.alerts || []);
@@ -82,14 +96,14 @@ export default function VisionScoreDashboard() {
     } catch (err) {
       console.warn('Could not retrieve alerts feed:', err.message);
     }
-  }, [selectedAlert]);
+  }, [alertStatusFilter, selectedAlert]);
 
   // Polling loop for live camera frame
   useEffect(() => {
     fetchCameraFrame();
     fetchAlerts();
 
-    if (isStreaming) {
+    if (isStreaming && !isUploadedImage) {
       pollingTimerRef.current = setInterval(() => {
         fetchCameraFrame();
       }, 1500);
@@ -97,9 +111,23 @@ export default function VisionScoreDashboard() {
     return () => {
       if (pollingTimerRef.current) clearInterval(pollingTimerRef.current);
     };
-  }, [isStreaming, fetchCameraFrame, fetchAlerts]);
+  }, [isStreaming, isUploadedImage, fetchCameraFrame, fetchAlerts]);
 
-  // 3. Toggle Simulated Obstacle in Feed
+  // 3. Switch Camera Terrain Profile
+  const handleSelectTerrainMode = async (mode) => {
+    setTerrainMode(mode);
+    setIsUploadedImage(false);
+    try {
+      await axios.post(`${BACKEND_BASE}/api/visionscore/camera/terrain`, null, {
+        params: { mode },
+      });
+      fetchCameraFrame();
+    } catch (err) {
+      console.error('Failed to set terrain mode:', err);
+    }
+  };
+
+  // 4. Toggle Simulated Obstacle in Feed
   const handleToggleObstacle = async () => {
     try {
       const nextState = !isInjectingObstacle;
@@ -113,13 +141,16 @@ export default function VisionScoreDashboard() {
     }
   };
 
-  // 4. Handle Image File Upload
+  // 5. Handle Image File Upload
   const handleFileUpload = async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setLoading(true);
     setErrorMessage(null);
+    setIsUploadedImage(true);
+    setIsStreaming(false); // Pause live stream on upload
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('environment', environment);
@@ -128,16 +159,17 @@ export default function VisionScoreDashboard() {
     try {
       const res = await axios.post(`${BACKEND_BASE}/api/visionscore/segment`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 8000,
+        timeout: 10000,
       });
-      setSegmentationData(res.data);
-      setCurrentFrameData((prev) => ({
-        ...prev,
+      setCurrentFrameData({
+        ...res.data,
         frame_data_uri: res.data.original_data_uri,
         overlay_data_uri: res.data.overlay_data_uri,
+        color_map_data_uri: res.data.color_map_data_uri,
         dominant_class: res.data.dominant_class,
         class_percentages: res.data.class_pixel_percentages,
-      }));
+        risk_assessment: res.data.risk_assessment,
+      });
       fetchAlerts();
     } catch (err) {
       setErrorMessage(`Upload segmentation failed: ${err.response?.data?.detail || err.message}`);
@@ -146,12 +178,61 @@ export default function VisionScoreDashboard() {
     }
   };
 
-  // 5. Handle Verification Status Update
+  // 6. Explicit Analyze Button
+  const handleAnalyzeCurrentFrame = async () => {
+    setLoading(true);
+    try {
+      const res = await axios.post(`${BACKEND_BASE}/api/visionscore/segment`, null, {
+        params: { environment, include_preview: true },
+        timeout: 8000,
+      });
+      setCurrentFrameData((prev) => ({
+        ...prev,
+        ...res.data,
+        frame_data_uri: res.data.original_data_uri,
+        overlay_data_uri: res.data.overlay_data_uri,
+        color_map_data_uri: res.data.color_map_data_uri,
+        dominant_class: res.data.dominant_class,
+        class_percentages: res.data.class_pixel_percentages,
+        risk_assessment: res.data.risk_assessment,
+      }));
+      fetchAlerts();
+    } catch (err) {
+      setErrorMessage(`Analysis failed: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 7. Reset Button: Clears uploads & filters, restores live feed
+  const handleResetDashboard = () => {
+    setIsUploadedImage(false);
+    setSelectedTerrainFilter('ALL');
+    setHazardFilterOnly(false);
+    setViewMode('overlay');
+    setIsStreaming(true);
+    setErrorMessage(null);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    fetchCameraFrame();
+  };
+
+  // 8. Clear Alert History
+  const handleClearAlerts = async () => {
+    try {
+      await axios.post(`${BACKEND_BASE}/api/visionscore/alerts/clear`);
+      setAlerts([]);
+      setSelectedAlert(null);
+    } catch (err) {
+      console.error('Failed to clear alerts:', err);
+    }
+  };
+
+  // 9. Handle Verification Status Update
   const handleVerifyAlert = async (eventId, status) => {
     try {
       await axios.post(`${BACKEND_BASE}/api/visionscore/alerts/${eventId}/verify`, {
         status,
-        notes: `Operator verification via Dark Space HUD at ${new Date().toISOString()}`,
+        notes: `Operator verification via Mars Mission HUD at ${new Date().toISOString()}`,
       });
       fetchAlerts();
       if (selectedAlert?.event_id === eventId) {
@@ -161,6 +242,28 @@ export default function VisionScoreDashboard() {
       console.error('Failed to verify alert:', err);
     }
   };
+
+  // 10. Export JSON Report
+  const handleExportReport = () => {
+    const reportData = {
+      system: 'ODYSSEY MARS-09 VisionScore 2.0',
+      timestamp: new Date().toISOString(),
+      environment,
+      terrainMode,
+      telemetry: currentFrameData,
+      activeAlertsCount: alerts.length,
+      alerts,
+    };
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `visionscore_report_${Date.now()}.json`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const risk = currentFrameData?.risk_assessment;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-primary)', color: 'var(--text-primary)', overflow: 'hidden' }}>
@@ -177,8 +280,8 @@ export default function VisionScoreDashboard() {
         flexWrap: 'wrap',
         gap: '8px'
       }}>
-        {/* Left: Environment Profile & Stream Toggle */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        {/* Left: Subsystem Name, Environment & Stream Toggle */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Camera size={16} color="var(--rover)" />
             <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.04em' }}>
@@ -186,9 +289,9 @@ export default function VisionScoreDashboard() {
             </span>
           </div>
 
-          {/* Environment Selector (Mars-Only Operations) */}
+          {/* Profile Selector */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-primary)', padding: '2px 4px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '0 4px' }}>PROFILE:</span>
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '0 4px' }}>ENV:</span>
             {['MARS', 'SIMULATION_MARS'].map((env) => (
               <button
                 key={env}
@@ -209,9 +312,41 @@ export default function VisionScoreDashboard() {
             ))}
           </div>
 
+          {/* Simulated Terrain Mode Switcher */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-primary)', padding: '2px 4px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '0 4px' }}>FEED:</span>
+            {['MIXED', 'SOIL', 'BEDROCK', 'SAND', 'BOULDER'].map((mode) => (
+              <button
+                key={mode}
+                onClick={() => handleSelectTerrainMode(mode)}
+                title={`Switch camera feed to synthetic ${mode} scene`}
+                style={{
+                  background: terrainMode === mode && !isUploadedImage ? 'rgba(6, 182, 212, 0.25)' : 'transparent',
+                  color: terrainMode === mode && !isUploadedImage ? 'var(--rover)' : 'var(--text-secondary)',
+                  border: `1px solid ${terrainMode === mode && !isUploadedImage ? 'var(--rover)' : 'transparent'}`,
+                  borderRadius: '3px',
+                  padding: '2px 6px',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+
           {/* Stream Controls */}
           <button
-            onClick={() => setIsStreaming(!isStreaming)}
+            onClick={() => {
+              if (isUploadedImage) {
+                setIsUploadedImage(false);
+                setIsStreaming(true);
+                fetchCameraFrame();
+              } else {
+                setIsStreaming(!isStreaming);
+              }
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -227,37 +362,98 @@ export default function VisionScoreDashboard() {
             }}
           >
             {isStreaming ? <Pause size={12} /> : <Play size={12} />}
-            {isStreaming ? 'STREAM ACTIVE' : 'STREAM PAUSED'}
+            {isStreaming ? 'CAMERA ACTIVE' : isUploadedImage ? 'SHOW LIVE FEED' : 'CAMERA PAUSED'}
           </button>
         </div>
 
-        {/* Right: Trigger Obstacle Simulation & Upload */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        {/* Right: Actions (Analyze, Reset, Refresh, Inject, Upload, Export) */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
           <button
-            onClick={handleToggleObstacle}
+            onClick={handleAnalyzeCurrentFrame}
+            disabled={loading}
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
-              background: isInjectingObstacle ? 'rgba(231, 76, 60, 0.25)' : 'rgba(255, 255, 255, 0.05)',
-              color: isInjectingObstacle ? '#FF6B6B' : 'var(--text-primary)',
-              border: `1px solid ${isInjectingObstacle ? '#E74C3C' : 'var(--border-subtle)'}`,
+              gap: '4px',
+              background: 'rgba(6, 182, 212, 0.2)',
+              color: 'var(--rover)',
+              border: '1px solid var(--rover)',
               borderRadius: '4px',
-              padding: '4px 10px',
+              padding: '4px 8px',
               fontSize: '11px',
               fontWeight: 600,
               cursor: 'pointer',
             }}
           >
-            <ShieldAlert size={13} color={isInjectingObstacle ? '#FF6B6B' : 'var(--caution)'} />
-            {isInjectingObstacle ? 'SIMULATED OBSTACLE INJECTED' : 'INJECT OBSTACLE TEST'}
+            <Sparkles size={12} />
+            ANALYZE
+          </button>
+
+          <button
+            onClick={fetchCameraFrame}
+            title="Refresh current frame and telemetry"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+            }}
+          >
+            <RefreshCw size={12} />
+            REFRESH
+          </button>
+
+          <button
+            onClick={handleResetDashboard}
+            title="Reset analysis and restore nominal live feed"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'var(--bg-primary)',
+              color: 'var(--text-secondary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+            }}
+          >
+            <RotateCcw size={12} />
+            RESET
+          </button>
+
+          <button
+            onClick={handleToggleObstacle}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: isInjectingObstacle ? 'rgba(231, 76, 60, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+              color: isInjectingObstacle ? '#FF6B6B' : 'var(--text-primary)',
+              border: `1px solid ${isInjectingObstacle ? '#E74C3C' : 'var(--border-subtle)'}`,
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            <ShieldAlert size={12} color={isInjectingObstacle ? '#FF6B6B' : 'var(--caution)'} />
+            {isInjectingObstacle ? 'OBSTACLE INJECTED' : 'INJECT OBSTACLE'}
           </button>
 
           <input
             type="file"
             ref={fileInputRef}
             onChange={handleFileUpload}
-            accept="image/*"
+            accept="image/*,.png,.jpg,.jpeg"
             style={{ display: 'none' }}
           />
           <button
@@ -265,18 +461,38 @@ export default function VisionScoreDashboard() {
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '6px',
+              gap: '4px',
               background: 'var(--bg-primary)',
               color: 'var(--text-primary)',
               border: '1px solid var(--border-subtle)',
               borderRadius: '4px',
-              padding: '4px 10px',
+              padding: '4px 8px',
               fontSize: '11px',
               cursor: 'pointer',
             }}
           >
             <Upload size={12} />
             UPLOAD IMAGE
+          </button>
+
+          <button
+            onClick={handleExportReport}
+            title="Export full diagnostic report as JSON"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'var(--bg-primary)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '4px',
+              padding: '4px 8px',
+              fontSize: '11px',
+              cursor: 'pointer',
+            }}
+          >
+            <Download size={12} />
+            EXPORT
           </button>
         </div>
       </div>
@@ -286,13 +502,16 @@ export default function VisionScoreDashboard() {
       {/* ───────────────────────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 380px', flex: 1, minHeight: 0, overflow: 'hidden' }}>
         {/* Left Column: Live Viewport & Semantic Viewer */}
-        <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflowY: 'auto', padding: '16px', gap: '16px' }}>
-          {/* View Mode Switcher */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-surface)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
-            <div style={{ display: 'flex', gap: '6px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-subtle)', overflowY: 'auto', padding: '14px', gap: '12px' }}>
+          
+          {/* View Mode & Filter Switchers Toolbar */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-surface)', padding: '6px 12px', borderRadius: '6px', border: '1px solid var(--border-subtle)', flexWrap: 'wrap', gap: '6px' }}>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
               {[
                 { id: 'overlay', label: 'Semantic Overlay', icon: Layers },
-                { id: 'frame', label: 'Clean Camera Frame', icon: Eye },
+                { id: 'mask', label: 'Segmentation Mask', icon: Sparkles },
+                { id: 'frame', label: 'Original Frame', icon: Eye },
+                { id: 'side-by-side', label: 'Side-by-Side', icon: Columns },
               ].map((m) => (
                 <button
                   key={m.id}
@@ -300,21 +519,41 @@ export default function VisionScoreDashboard() {
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '6px',
+                    gap: '4px',
                     background: viewMode === m.id ? 'var(--rover)' : 'transparent',
                     color: viewMode === m.id ? '#000' : 'var(--text-secondary)',
                     border: 'none',
                     borderRadius: '4px',
-                    padding: '4px 10px',
-                    fontSize: '12px',
+                    padding: '4px 8px',
+                    fontSize: '11px',
                     fontWeight: 600,
                     cursor: 'pointer',
                   }}
                 >
-                  <m.icon size={13} />
+                  <m.icon size={12} />
                   {m.label}
                 </button>
               ))}
+
+              <button
+                onClick={() => setHazardFilterOnly(!hazardFilterOnly)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  background: hazardFilterOnly ? 'rgba(239, 68, 68, 0.2)' : 'transparent',
+                  color: hazardFilterOnly ? 'var(--hazard)' : 'var(--text-secondary)',
+                  border: `1px solid ${hazardFilterOnly ? 'var(--hazard)' : 'var(--border-subtle)'}`,
+                  borderRadius: '4px',
+                  padding: '4px 8px',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                <Filter size={12} />
+                {hazardFilterOnly ? 'HAZARDS ISOLATED' : 'FILTER HAZARDS'}
+              </button>
             </div>
 
             {/* Dominant Class Readout */}
@@ -334,18 +573,18 @@ export default function VisionScoreDashboard() {
               background: 'rgba(231, 76, 60, 0.15)',
               border: '1px solid #E74C3C',
               borderRadius: '6px',
-              padding: '10px 14px',
+              padding: '8px 12px',
               color: '#FF6B6B',
-              fontSize: '12px',
+              fontSize: '11px',
               fontFamily: 'var(--font-mono)',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <AlertTriangle size={16} />
+                <AlertTriangle size={15} />
                 <span>
-                  <strong>CRITICAL HAZARD DETECTED:</strong> High-contrast obstacle in path. Auto-capture triggered.
+                  <strong>{risk?.status || 'OBSTACLE DETECTED'}:</strong> {risk?.explanation || 'High-contrast morphological feature in path.'}
                 </span>
               </div>
-              <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+              <span style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
                 ID: {currentFrameData.alert?.event_id || 'PENDING'}
               </span>
             </div>
@@ -357,7 +596,7 @@ export default function VisionScoreDashboard() {
             background: '#090D14',
             border: '1px solid var(--border-subtle)',
             borderRadius: '8px',
-            minHeight: '340px',
+            minHeight: '320px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -366,18 +605,48 @@ export default function VisionScoreDashboard() {
             {loading ? (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: 'var(--rover)' }}>
                 <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite' }} />
-                <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)' }}>SEGMENTING TERRAIN PIXELS...</span>
+                <span style={{ fontSize: '12px', fontFamily: 'var(--font-mono)' }}>SEGMENTING TERRAIN PIXELS (AI4MARS)...</span>
               </div>
             ) : currentFrameData ? (
-              <img
-                src={
-                  viewMode === 'overlay' && currentFrameData.overlay_data_uri
-                    ? currentFrameData.overlay_data_uri
-                    : currentFrameData.frame_data_uri
-                }
-                alt="VisionScore Feed"
-                style={{ width: '100%', height: 'auto', maxHeight: '480px', objectFit: 'contain', display: 'block' }}
-              />
+              viewMode === 'side-by-side' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', width: '100%', height: '100%', gap: '4px' }}>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', padding: '2px 6px', fontSize: '10px', borderRadius: '3px' }}>CAMERA FRAME</span>
+                    <img
+                      src={currentFrameData.frame_data_uri}
+                      alt="Raw Camera"
+                      style={{ width: '100%', height: 'auto', maxHeight: '420px', objectFit: 'contain', display: 'block' }}
+                    />
+                  </div>
+                  <div style={{ position: 'relative' }}>
+                    <span style={{ position: 'absolute', top: 6, left: 6, background: 'rgba(0,0,0,0.7)', padding: '2px 6px', fontSize: '10px', borderRadius: '3px' }}>SEMANTIC OVERLAY</span>
+                    <img
+                      src={currentFrameData.overlay_data_uri || currentFrameData.frame_data_uri}
+                      alt="Overlay"
+                      style={{ width: '100%', height: 'auto', maxHeight: '420px', objectFit: 'contain', display: 'block' }}
+                    />
+                  </div>
+                </div>
+              ) : (
+                <img
+                  src={
+                    viewMode === 'mask' && currentFrameData.color_map_data_uri
+                      ? currentFrameData.color_map_data_uri
+                      : viewMode === 'overlay' && currentFrameData.overlay_data_uri
+                      ? currentFrameData.overlay_data_uri
+                      : currentFrameData.frame_data_uri
+                  }
+                  alt="VisionScore View"
+                  style={{
+                    width: '100%',
+                    height: 'auto',
+                    maxHeight: '420px',
+                    objectFit: 'contain',
+                    display: 'block',
+                    filter: hazardFilterOnly ? 'contrast(1.3) saturate(1.4)' : 'none',
+                  }}
+                />
+              )
             ) : (
               <div style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>
                 Awaiting camera stream initialization...
@@ -385,30 +654,93 @@ export default function VisionScoreDashboard() {
             )}
           </div>
 
-          {/* Semantic Classes Distribution & Legend */}
-          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '14px' }}>
-            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '10px', display: 'flex', justifyContent: 'space-between' }}>
-              <span>SEMANTIC CLASS DISTRIBUTION</span>
-              <span style={{ fontSize: '10px' }}>ALGORITHMIC DEMO MODEL (PSM-TCS)</span>
+          {/* Terrain Risk Assessment Card (Phase E) */}
+          {risk && (
+            <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                  TERRAIN RISK ASSESSMENT (§PHASE E)
+                </span>
+                <span style={{
+                  fontSize: '10px',
+                  fontWeight: 700,
+                  padding: '2px 8px',
+                  borderRadius: '3px',
+                  background:
+                    risk.risk_level === 'SAFE'
+                      ? 'rgba(16, 185, 129, 0.2)'
+                      : risk.risk_level === 'CAUTION' || risk.risk_level === 'LOW RISK'
+                      ? 'rgba(245, 158, 11, 0.2)'
+                      : 'rgba(239, 68, 68, 0.2)',
+                  color:
+                    risk.risk_level === 'SAFE'
+                      ? 'var(--safe)'
+                      : risk.risk_level === 'CAUTION' || risk.risk_level === 'LOW RISK'
+                      ? 'var(--caution)'
+                      : 'var(--hazard)',
+                }}>
+                  {risk.status} ({risk.risk_level})
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', marginBottom: '8px', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>
+                <div>RISK SCORE: <strong>{risk.risk_score?.toFixed(2)}</strong> / 1.0</div>
+                <div>CONFIDENCE: <strong>{(risk.confidence * 100).toFixed(0)}%</strong></div>
+                <div>CORRIDOR: <strong style={{ color: risk.in_travel_corridor ? 'var(--hazard)' : 'var(--safe)' }}>{risk.in_travel_corridor ? 'INTERSECTING' : 'CLEAR'}</strong></div>
+              </div>
+
+              <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.4, marginBottom: '6px' }}>
+                <strong>ACTION:</strong> <span style={{ color: 'var(--rover)' }}>{risk.recommended_action}</span> — {risk.explanation}
+              </div>
+            </div>
+          )}
+
+          {/* Semantic Classes Distribution & Filter Buttons (Phase B & C) */}
+          <div style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)', borderRadius: '8px', padding: '12px' }}>
+            <div style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px', display: 'flex', justifyContent: 'space-between' }}>
+              <span>AI4MARS SEMANTIC TERRAIN CATEGORIES</span>
+              <span style={{ fontSize: '10px' }}>CLICK TO FILTER & INSPECT SUBSTRATE</span>
             </div>
 
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
               {SEMANTIC_CLASSES.map((cls) => {
                 const pct = currentFrameData?.class_percentages?.[cls.name] ?? 0;
+                const isSelected = selectedTerrainFilter === cls.name;
                 return (
-                  <div key={cls.name} style={{ background: 'var(--bg-primary)', padding: '8px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
+                  <div
+                    key={cls.name}
+                    onClick={() => {
+                      if (cls.active) {
+                        setSelectedTerrainFilter(selectedTerrainFilter === cls.name ? 'ALL' : cls.name);
+                      }
+                    }}
+                    style={{
+                      background: isSelected ? 'rgba(6, 182, 212, 0.15)' : 'var(--bg-primary)',
+                      padding: '8px',
+                      borderRadius: '4px',
+                      border: `1px solid ${isSelected ? 'var(--rover)' : 'var(--border-subtle)'}`,
+                      cursor: cls.active ? 'pointer' : 'default',
+                      opacity: cls.active ? 1.0 : 0.6,
+                    }}
+                  >
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: cls.color }} />
                         <span style={{ fontSize: '11px', fontWeight: 600 }}>
                           {cls.name}
-                          {!cls.active && <span style={{ fontSize: '9px', color: 'var(--text-secondary)', marginLeft: '4px' }}>(Ext)</span>}
+                          {cls.labelId !== null && <span style={{ fontSize: '9px', color: 'var(--text-secondary)', marginLeft: '3px' }}>[{cls.labelId}]</span>}
+                          {!cls.active && <span style={{ fontSize: '9px', color: 'var(--text-secondary)', marginLeft: '3px' }}>(Ext)</span>}
                         </span>
                       </div>
                       <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
                         {pct.toFixed(1)}%
                       </span>
                     </div>
+
+                    <div style={{ fontSize: '9px', color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                      {cls.traction}
+                    </div>
+
                     {/* Progress Bar */}
                     <div style={{ width: '100%', height: '4px', background: 'rgba(255,255,255,0.08)', borderRadius: '2px', overflow: 'hidden' }}>
                       <div style={{ width: `${Math.min(pct, 100)}%`, height: '100%', background: cls.color }} />
@@ -421,15 +753,44 @@ export default function VisionScoreDashboard() {
         </div>
 
         {/* Right Column: Obstacle Alerts & Verification Stack */}
-        <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', overflowY: 'auto', padding: '16px', gap: '14px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', overflowY: 'auto', padding: '14px', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               <ShieldAlert size={16} color="var(--caution)" />
               <span style={{ fontSize: '13px', fontWeight: 600 }}>OBSTACLE ALERTS FEED</span>
             </div>
-            <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-              {alerts.length} CAPTURED
-            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <select
+                value={alertStatusFilter}
+                onChange={(e) => setAlertStatusFilter(e.target.value)}
+                style={{
+                  background: 'var(--bg-primary)',
+                  color: 'var(--text-primary)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '4px',
+                  padding: '2px 6px',
+                  fontSize: '10px',
+                }}
+              >
+                <option value="ALL">ALL STATUSES</option>
+                <option value="UNVERIFIED">UNVERIFIED</option>
+                <option value="CONFIRMED">CONFIRMED</option>
+                <option value="FALSE_POSITIVE">FALSE POSITIVE</option>
+              </select>
+              <button
+                onClick={handleClearAlerts}
+                title="Clear all alerts"
+                style={{
+                  background: 'transparent',
+                  color: 'var(--text-secondary)',
+                  border: 'none',
+                  cursor: 'pointer',
+                  padding: '2px',
+                }}
+              >
+                <Trash2 size={13} />
+              </button>
+            </div>
           </div>
 
           {/* Selected Alert Detailed Card */}
@@ -463,12 +824,11 @@ export default function VisionScoreDashboard() {
 
               {/* Thumbnail */}
               {selectedAlert.annotated_path && (
-                <div style={{ width: '100%', height: '140px', background: '#090D14', borderRadius: '4px', overflow: 'hidden', marginBottom: '10px' }}>
+                <div style={{ width: '100%', height: '130px', background: '#090D14', borderRadius: '4px', overflow: 'hidden', marginBottom: '10px' }}>
                   <img
                     src={`${BACKEND_BASE}/${selectedAlert.annotated_path}`}
                     alt="Alert Preview"
                     onError={(e) => {
-                      // Fallback if image path relative
                       e.target.style.display = 'none';
                     }}
                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
@@ -480,7 +840,7 @@ export default function VisionScoreDashboard() {
                 {selectedAlert.explanation}
               </p>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', fontFamily: 'var(--font-mono)', marginBottom: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', fontSize: '11px', fontFamily: 'var(--font-mono)', marginBottom: '10px' }}>
                 <div>CONFIDENCE: {(selectedAlert.confidence * 100).toFixed(0)}%</div>
                 <div>COVERAGE: {selectedAlert.obstacle_area_pct?.toFixed(1)}%</div>
                 <div>SOURCE: {selectedAlert.source}</div>
@@ -536,11 +896,11 @@ export default function VisionScoreDashboard() {
           {/* List of Captured Events */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             <span style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-              EVENT HISTORY LOG
+              EVENT HISTORY LOG ({alerts.length})
             </span>
             {alerts.length === 0 ? (
-              <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '11px' }}>
-                No obstacle events triggered. System operating nominally.
+              <div style={{ padding: '24px', textAlign: 'center', color: 'var(--text-secondary)', fontSize: '11px', background: 'var(--bg-primary)', borderRadius: '6px', border: '1px solid var(--border-subtle)' }}>
+                No obstacle events recorded. Surface traversability nominal.
               </div>
             ) : (
               alerts.map((al) => (
@@ -587,4 +947,3 @@ export default function VisionScoreDashboard() {
     </div>
   );
 }
-
