@@ -246,7 +246,7 @@ export default function VisionScoreDashboard() {
   // 10. Export JSON Report
   const handleExportReport = () => {
     const reportData = {
-      system: 'A.R.E.S. MARS-09 VisionScore',
+      system: 'ODYSSEY MARS-09 VisionScore 2.0',
       timestamp: new Date().toISOString(),
       environment,
       terrainMode,

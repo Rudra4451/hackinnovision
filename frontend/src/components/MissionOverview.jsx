@@ -4,7 +4,7 @@ import { BatteryCharging, Compass, Radio, Sun, Thermometer, ShieldCheck, Cpu } f
 export default function MissionOverview({ telemetry, activeTarget }) {
   const t = telemetry || {
     sol: 142,
-    rover_name: 'A.R.E.S. MARS-09',
+    rover_name: 'MARS-09 Odyssey',
     rover_position: [2, 2],
     battery_level_pct: 94.2,
     solar_irradiance_w_m2: 582.4,
