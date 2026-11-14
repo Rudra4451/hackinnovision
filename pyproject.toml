@@ -31,6 +31,11 @@ test = [
     "pytest>=7.0.0",
 ]
 
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["backend*", "core*", "terrain_intelligence*", "visionscore*", "api*"]
+exclude = ["frontend*", "tests*", "outputs*", "data*", "ODYSSEY-MARS09*"]
+
 [tool.vercel]
 entrypoint = "backend.main:app"
 
