@@ -11,13 +11,16 @@ import {
   Activity,
   Database,
   Radio,
+  Eye,
+  Sliders,
 } from 'lucide-react';
 
-import Terrain3DMap from './components/terrain/Terrain3DMap';
-import TerrainControls from './components/terrain/TerrainControls';
-import RoverSimulation from './components/rover/RoverSimulation';
+import TerrainThreeMap from './components/three/TerrainThreeMap';
+import InteractiveRoverHUD from './components/navigation/InteractiveRoverHUD';
 import RouteMetrics from './components/navigation/RouteMetrics';
 import RouteComparison from './components/navigation/RouteComparison';
+import Terrain3DMap from './components/terrain/Terrain3DMap';
+import TerrainControls from './components/terrain/TerrainControls';
 
 import StatusChip from './components/shared/StatusChip';
 import ErrorBanner from './components/shared/ErrorBanner';
@@ -25,22 +28,32 @@ import EmptyState from './components/shared/EmptyState';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 
 import { useMissionData } from './hooks/useMissionData';
-import { useSimulation } from './hooks/useSimulation';
-import { getCostClassification } from './utils/terrainHelpers';
-import { isInsideBounds } from './utils/coordinateMapping';
+import { bilinearElevation } from './utils/coordinateMapping';
 
 export default function App() {
-  // 1. Mission Coordinates State (§1.1, §7.1)
-  const [startPos, setStartPos] = useState([2, 2]);
-  const [goalPos, setGoalPos] = useState([45, 45]);
+  // 1. Interactive Marker Endpoints (Blue Start & Yellow Destination)
+  const [startPoint, setStartPoint] = useState([5, 5]);
+  const [destinationPoint, setDestinationPoint] = useState([40, 40]);
+  const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'start' | 'destination'
 
-  // 2. Mission Data Integration Hook (§7.3)
-  const { dem, costMap, navigation, loading, error, reload, integrity } = useMissionData(startPos, goalPos);
+  // 2. Authoritative Route Selection & Rover Kinematics
+  const [activeRoute, setActiveRoute] = useState('safest'); // 'safest' (Green) | 'shortest' (Red)
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [roverProgress, setRoverProgress] = useState(0);
 
-  // 3. View Switcher Mode (§2.4)
-  const [activeView, setActiveView] = useState('terrain'); // 'terrain' | 'simulation'
+  // 3. View Mode: Interactive Three.js (Unified) vs Topographic Plotly
+  const [activeView, setActiveView] = useState('interactive'); // 'interactive' | 'topographic'
 
-  // 4. Terrain Overlay Controls State (§2.5, §3.3)
+  // 4. Mission Data Bridge (FastAPI Integration)
+  const { dem, costMap, navigation, loading, error, reload, integrity } = useMissionData(
+    startPoint || [2, 2],
+    destinationPoint || [45, 45]
+  );
+
+  // 5. Interactive Inspection State
+  const [hoveredCell, setHoveredCell] = useState(null);
+
+  // Topographic Overlay Controls (for Plotly mode)
   const [overlays, setOverlays] = useState({
     route: true,
     hazards: true,
@@ -50,97 +63,147 @@ export default function App() {
   });
   const [displayScale, setDisplayScale] = useState(1.0);
 
-  // 5. Interactive Inspection State (§2.5, §9)
-  const [hoveredCell, setHoveredCell] = useState(null);
-  const [pinnedCell, setPinnedCell] = useState(null);
-  const [outOfBoundsWarning, setOutOfBoundsWarning] = useState(null);
+  // Current active path waypoints
+  const activePath = useMemo(() => {
+    return navigation?.[activeRoute]?.route?.path || [];
+  }, [navigation, activeRoute]);
 
-  // 6. Rover Simulation Lifecycle Engine (§4.2)
-  const routePath = useMemo(() => {
-    return navigation?.safest?.route?.success ? navigation.safest.route.path || [] : [];
-  }, [navigation]);
+  // Live continuous rover position
+  const roverCoord = useMemo(() => {
+    if (!activePath || activePath.length === 0) return startPoint || [0, 0];
+    const maxIdx = Math.max(1, activePath.length - 1);
+    const clampedProgress = Math.max(0, Math.min(maxIdx, roverProgress));
+    const k = Math.floor(clampedProgress);
+    const t = clampedProgress - k;
+    const p0 = activePath[k] || activePath[0];
+    const p1 = activePath[Math.min(k + 1, maxIdx)];
+    return [p0[0] + (p1[0] - p0[0]) * t, p0[1] + (p1[1] - p0[1]) * t];
+  }, [activePath, roverProgress, startPoint]);
 
-  const simState = useSimulation(routePath, { initialSpeed: 1.0 });
+  // Current continuous elevation
+  const currentElevation = useMemo(() => {
+    if (!dem?.elevation || !roverCoord) return null;
+    return bilinearElevation(roverCoord[0], roverCoord[1], dem.elevation, dem.rows, dem.cols);
+  }, [dem, roverCoord]);
 
-  // Current active rover position
-  const activeRoverPos = useMemo(() => {
-    if (routePath.length > 0) {
-      return simState.currentCoordinate || routePath[0];
+  // High-level Navigation Status
+  const navStatus = useMemo(() => {
+    if (!startPoint) return 'SELECT_START';
+    if (!destinationPoint) return 'SELECT_DESTINATION';
+    if (loading) return 'CALCULATING';
+    if (!navigation?.[activeRoute]?.route?.success) return 'BLOCKED';
+    if (isPlaying) return 'NAVIGATING';
+    if (roverProgress > 0 && roverProgress < activePath.length - 1) return 'PAUSED';
+    if (roverProgress >= activePath.length - 1 && activePath.length > 1) return 'ARRIVED';
+    return 'READY';
+  }, [startPoint, destinationPoint, loading, navigation, activeRoute, isPlaying, roverProgress, activePath]);
+
+  // Handlers for Terrain Interaction
+  const handleSelectStart = useCallback((row, col) => {
+    setStartPoint([row, col]);
+    setIsPlaying(false);
+    setRoverProgress(0);
+    setSelectionMode('auto');
+  }, []);
+
+  const handleSelectDestination = useCallback((row, col) => {
+    setDestinationPoint([row, col]);
+    setIsPlaying(false);
+    setRoverProgress(0);
+    setSelectionMode('auto');
+  }, []);
+
+  const handleResetPoints = useCallback(() => {
+    setStartPoint(null);
+    setDestinationPoint(null);
+    setIsPlaying(false);
+    setRoverProgress(0);
+    setSelectionMode('start');
+  }, []);
+
+  // Handlers for Rover Traversal Controls
+  const handlePlay = useCallback(() => {
+    if (!navigation?.[activeRoute]?.route?.success) return;
+    setIsPlaying(true);
+  }, [navigation, activeRoute]);
+
+  const handlePause = useCallback(() => {
+    setIsPlaying(false);
+  }, []);
+
+  const handleResume = useCallback(() => {
+    if (!navigation?.[activeRoute]?.route?.success) return;
+    setIsPlaying(true);
+  }, [navigation, activeRoute]);
+
+  const handleResetRover = useCallback(() => {
+    setIsPlaying(false);
+    setRoverProgress(0);
+  }, []);
+
+  const handleSelectRoute = useCallback((routeKey) => {
+    setActiveRoute(routeKey);
+    setIsPlaying(false);
+    setRoverProgress(0);
+  }, []);
+
+  const handleRoverProgressUpdate = useCallback((nextProgress, isDone) => {
+    setRoverProgress(nextProgress);
+    if (isDone) {
+      setIsPlaying(false);
     }
-    return startPos;
-  }, [routePath, simState.currentCoordinate, startPos]);
-
-  // Handle overlay checkbox toggle
-  const handleToggleOverlay = useCallback((key, checked) => {
-    setOverlays((prev) => ({ ...prev, [key]: checked }));
   }, []);
-
-  // Handle cell click on 3D terrain (§2.5)
-  const handleCellClick = useCallback((cellData) => {
-    setPinnedCell(cellData);
-  }, []);
-
-  // Handle custom destination goal
-  const handleSetGoal = useCallback(([r, c]) => {
-    setGoalPos([r, c]);
-    setPinnedCell(null);
-    simState.reset();
-  }, [simState]);
-
-  // Validate rover position against DEM bounds (§8.1)
-  const isRoverValid = useMemo(() => {
-    if (!dem || !activeRoverPos) return true;
-    return isInsideBounds(activeRoverPos[0], activeRoverPos[1], dem.rows, dem.cols);
-  }, [dem, activeRoverPos]);
 
   return (
     <div className="mc-container">
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* TOP BAR (§2.4)                                                */}
+      {/* TOP BAR: BRANDING, VIEW SWITCHER & STATUS                     */}
       {/* ───────────────────────────────────────────────────────────── */}
       <header className="mc-top-bar">
         <div className="mc-brand-area">
           <Radio size={18} color="var(--rover)" />
           <div>
             <div className="mc-title">MARS-09 ODYSSEY</div>
-            <div className="mc-subtitle">TRACK A // PLANETARY RECONNAISSANCE & AUTONOMOUS NAVIGATION</div>
+            <div className="mc-subtitle">INTERACTIVE TERRAIN RECONNAISSANCE & AUTONOMOUS ROVER NAVIGATION</div>
           </div>
         </div>
 
-        {/* View Switcher (§2.4) */}
+        {/* View Switcher: Interactive Three.js vs Topographic Surface */}
         <div className="mc-view-switcher">
           <button
-            className={`mc-view-btn ${activeView === 'terrain' ? 'active' : ''}`}
-            onClick={() => setActiveView('terrain')}
-          >
-            <Map size={13} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
-            Terrain Exploration
-          </button>
-          <button
-            className={`mc-view-btn ${activeView === 'simulation' ? 'active' : ''}`}
-            onClick={() => setActiveView('simulation')}
+            className={`mc-view-btn ${activeView === 'interactive' ? 'active' : ''}`}
+            onClick={() => setActiveView('interactive')}
+            title="Three.js interactive 3D terrain with raycasting & animated rover"
           >
             <Navigation size={13} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
-            Rover Simulation
+            Interactive Rover 3D
+          </button>
+          <button
+            className={`mc-view-btn ${activeView === 'topographic' ? 'active' : ''}`}
+            onClick={() => setActiveView('topographic')}
+            title="Plotly topographic elevation contours & analytical strata"
+          >
+            <Map size={13} style={{ marginRight: '6px', verticalAlign: 'middle' }} />
+            Topographic Analysis
           </button>
         </div>
 
-        {/* Global Mission Status Chip (§2.4, §4.3) */}
+        {/* Global Mission Status */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
           <span style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-            MISSION STATUS
+            STATUS:
           </span>
-          <StatusChip status={loading ? 'INITIALIZING' : error ? 'OFFLINE' : simState.status} />
+          <StatusChip status={loading ? 'INITIALIZING' : error ? 'OFFLINE' : navStatus} />
         </div>
       </header>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* MAIN SPLIT VIEWPORT (§2.4: 70% 3D Viewport / 30% Telemetry)   */}
+      {/* MAIN VIEWPORT: 70% 3D Viewport / 30% Telemetry Stack          */}
       {/* ───────────────────────────────────────────────────────────── */}
       <main className="mc-main-body">
-        {/* Left Column (70%): 3D Terrain Viewport */}
+        {/* Left Column (70%): 3D Viewport */}
         <section className="mc-viewport-area">
-          {loading ? (
+          {loading && !dem ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: '12px' }}>
               <div className="mono" style={{ color: 'var(--rover)', fontSize: '13px', letterSpacing: '0.08em' }}>
                 INGESTING MARS DEM ELEVATION MATRIX...
@@ -157,184 +220,107 @@ export default function App() {
               message="Upload or connect a DEM source to visualize Martian geological features."
               icon={Database}
             />
+          ) : activeView === 'interactive' ? (
+            /* UNIFIED THREE.JS INTERACTIVE MODULE (Raycasting + Rover) */
+            <ErrorBoundary fallbackTitle="Three.js 3D Interactive Viewport Failure">
+              <TerrainThreeMap
+                dem={dem}
+                costMap={costMap}
+                navigation={navigation}
+                startPoint={startPoint}
+                destinationPoint={destinationPoint}
+                onSelectStart={handleSelectStart}
+                onSelectDestination={handleSelectDestination}
+                selectionMode={selectionMode}
+                activeRoute={activeRoute}
+                isPlaying={isPlaying}
+                roverProgress={roverProgress}
+                onRoverProgressUpdate={handleRoverProgressUpdate}
+                onHoverCell={setHoveredCell}
+              />
+            </ErrorBoundary>
           ) : (
+            /* TOPOGRAPHIC SURFACE EXPLORATION (Plotly) */
             <>
-              {/* Overlay Toolbar (§2.5) */}
               <TerrainControls
                 overlays={overlays}
-                onChangeOverlay={handleToggleOverlay}
+                onChangeOverlay={(k, v) => setOverlays((prev) => ({ ...prev, [k]: v }))}
                 displayScale={displayScale}
                 onChangeDisplayScale={setDisplayScale}
               />
-
-              {/* 3D Map wrapped in ErrorBoundary (§8.2) */}
               <ErrorBoundary fallbackTitle="Terrain 3D Surface Rendering Exception">
                 <Terrain3DMap
                   dem={dem}
                   costMap={costMap}
                   navigation={navigation}
-                  roverPos={activeRoverPos}
-                  simulationIndex={simState.currentIndex}
+                  roverPos={roverCoord ? [Math.round(roverCoord[0]), Math.round(roverCoord[1])] : startPoint}
+                  simulationIndex={Math.floor(roverProgress)}
                   overlays={overlays}
                   displayScale={displayScale}
                   onHoverCell={setHoveredCell}
-                  onClickCell={handleCellClick}
-                  onOutOfBounds={(badPts) => setOutOfBoundsWarning(badPts[0])}
                 />
               </ErrorBoundary>
-
-              {/* Pinned Cell Interactive Chip (§2.5) */}
-              {pinnedCell && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: '16px',
-                    left: '16px',
-                    zIndex: 10,
-                    background: 'rgba(14, 21, 34, 0.95)',
-                    border: '1px solid var(--border-active)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '12px',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
-                    fontSize: '12px',
-                    fontFamily: 'var(--font-mono)',
-                    backdropFilter: 'blur(4px)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--text-primary)' }}>
-                    <MapPin size={14} color="var(--rover)" />
-                    <span>PINNED: ({pinnedCell.row}, {pinnedCell.col})</span>
-                    <span style={{ color: 'var(--text-secondary)' }}>
-                      · {pinnedCell.elevation !== null ? `${pinnedCell.elevation.toFixed(1)} m` : '—'}
-                    </span>
-                    <span
-                      style={{
-                        color:
-                          pinnedCell.cost === Infinity || pinnedCell.cost >= 9999
-                            ? 'var(--hazard)'
-                            : pinnedCell.cost > 2.0
-                            ? 'var(--caution)'
-                            : 'var(--safe)',
-                      }}
-                    >
-                      · {pinnedCell.cost === Infinity || pinnedCell.cost >= 9999
-                        ? 'HAZARD (IMPASSABLE)'
-                        : pinnedCell.cost > 2.0
-                        ? `CAUTION (${pinnedCell.cost.toFixed(1)})`
-                        : 'SAFE (1.0)'}
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    {pinnedCell.cost !== Infinity && pinnedCell.cost < 9999 && (
-                      <button
-                        className="mc-btn"
-                        style={{ padding: '2px 8px', fontSize: '11px', color: 'var(--safe)', borderColor: 'var(--safe)' }}
-                        onClick={() => handleSetGoal([pinnedCell.row, pinnedCell.col])}
-                      >
-                        SET AS GOAL
-                      </button>
-                    )}
-                    <button
-                      className="mc-btn"
-                      style={{ padding: '2px 6px', fontSize: '11px' }}
-                      onClick={() => setPinnedCell(null)}
-                    >
-                      DISMISS
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Invalid Rover Position Warning Card (§8.1) */}
-              {(!isRoverValid || outOfBoundsWarning) && (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '64px',
-                    right: '16px',
-                    zIndex: 10,
-                    background: 'rgba(6, 182, 212, 0.15)',
-                    border: '1px solid var(--rover)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: 'var(--rover)',
-                    fontSize: '12px',
-                    fontFamily: 'var(--font-mono)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.4)',
-                  }}
-                >
-                  <AlertTriangle size={14} />
-                  <span>
-                    Rover position out of bounds: (
-                    {outOfBoundsWarning ? `${outOfBoundsWarning[0]}, ${outOfBoundsWarning[1]}` : `${activeRoverPos[0]}, ${activeRoverPos[1]}`}
-                    )
-                  </span>
-                  <button
-                    onClick={() => setOutOfBoundsWarning(null)}
-                    style={{ background: 'transparent', border: 'none', color: 'var(--rover)', cursor: 'pointer' }}
-                  >
-                    ✕
-                  </button>
-                </div>
-              )}
             </>
           )}
         </section>
 
         {/* Right Column (30%, min 360px): Telemetry Stack */}
         <aside className="mc-telemetry-column">
-          {/* 1. Navigation Telemetry Panel (§5.2) */}
+          {/* 1. Integrated Interactive Rover HUD & Kinematic Controls */}
+          <InteractiveRoverHUD
+            startPoint={startPoint}
+            destinationPoint={destinationPoint}
+            onResetPoints={handleResetPoints}
+            onSetSelectionMode={setSelectionMode}
+            selectionMode={selectionMode}
+            navigation={navigation}
+            activeRoute={activeRoute}
+            onSelectRoute={handleSelectRoute}
+            isPlaying={isPlaying}
+            onPlay={handlePlay}
+            onPause={handlePause}
+            onResume={handleResume}
+            onResetRover={handleResetRover}
+            roverProgress={roverProgress}
+            roverCoord={roverCoord}
+            currentElevation={currentElevation}
+            navStatus={navStatus}
+            error={error}
+          />
+
+          {/* 2. Route Metrics Panel (Safest vs Shortest metrics) */}
           <RouteMetrics navigation={navigation} />
 
-          {/* 2. Collapsible Route Comparison Drawer (§5.3) */}
+          {/* 3. Collapsible Route Comparison Drawer */}
           <RouteComparison navigation={navigation} />
-
-          {/* 3. Rover Simulation Controls & Live Telemetry (§4.2, §4.3) */}
-          <ErrorBoundary fallbackTitle="Rover Simulation Module Failure">
-            <RoverSimulation
-              simState={simState}
-              routePath={routePath}
-              elevation={dem?.elevation}
-              costMap={costMap}
-              safestMetrics={navigation?.safest?.metrics}
-              routeSuccess={navigation?.safest?.route?.success ?? false}
-            />
-          </ErrorBoundary>
         </aside>
       </main>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* BOTTOM BAR (§2.4: Legend, Coordinate Readout, Integrity)      */}
+      {/* BOTTOM BAR: LEGEND, COORDINATE READOUT & DATA INTEGRITY       */}
       {/* ───────────────────────────────────────────────────────────── */}
       <footer className="mc-bottom-bar">
-        {/* Left: Legend Swatches */}
+        {/* Left: Map Legend Swatches */}
         <div className="mc-legend">
           <div className="mc-legend-item">
-            <span className="mc-swatch" style={{ background: 'var(--safe)' }} />
-            <span>SAFE</span>
+            <span className="mc-swatch" style={{ background: '#3b82f6' }} />
+            <span>START (BLUE)</span>
           </div>
           <div className="mc-legend-item">
-            <span className="mc-swatch" style={{ background: 'var(--caution)' }} />
-            <span>CAUTION (&gt;2.0)</span>
+            <span className="mc-swatch" style={{ background: '#f59e0b' }} />
+            <span>DESTINATION (YELLOW)</span>
           </div>
           <div className="mc-legend-item">
-            <span className="mc-swatch" style={{ background: 'var(--hazard)' }} />
-            <span>HAZARD (IMPASSABLE)</span>
+            <span className="mc-swatch" style={{ background: '#10b981' }} />
+            <span>SAFEST (GREEN)</span>
           </div>
           <div className="mc-legend-item">
-            <span className="mc-swatch" style={{ background: 'var(--rover)' }} />
-            <span>ROVER</span>
+            <span className="mc-swatch" style={{ background: '#ef4444' }} />
+            <span>SHORTEST (RED)</span>
           </div>
         </div>
 
-        {/* Center: Live Debounced Coordinate Readout (§2.5, §9) */}
+        {/* Center: Live Debounced Coordinate Readout */}
         <div className="mc-coord-readout">
           {hoveredCell ? (
             <span>
@@ -359,12 +345,12 @@ export default function App() {
             </span>
           ) : (
             <span style={{ color: 'var(--text-muted)' }}>
-              Hover over terrain surface to inspect coordinates and elevation
+              Click on terrain to place Start (Blue) & Destination (Yellow) markers
             </span>
           )}
         </div>
 
-        {/* Right: Data Integrity Indicators (§2.4) */}
+        {/* Right: Data Source Integrity Indicators */}
         <div className="mc-integrity-indicator">
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
             {integrity.demLoaded ? <CheckCircle2 size={13} color="var(--safe)" /> : <XCircle size={13} color="var(--hazard)" />}
@@ -376,7 +362,7 @@ export default function App() {
           </span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
             {integrity.routeLoaded ? <CheckCircle2 size={13} color="var(--safe)" /> : <XCircle size={13} color="var(--caution)" />}
-            <span>Route</span>
+            <span>Navigation</span>
           </span>
         </div>
       </footer>
