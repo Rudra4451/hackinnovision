@@ -34,6 +34,7 @@ export default function TerrainThreeMap({
   simSpeed = 1.0,
 }) {
   const mountRef = useRef(null);
+  const animFrameIdRef = useRef(null);
 
   // Persistent Three.js references
   const sceneRef = useRef(null);
