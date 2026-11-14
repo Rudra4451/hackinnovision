@@ -9,7 +9,7 @@
     "IoU_SAND": 0.3503,
     "IoU_BOULDER": 0.0
   },
-  "inference_latency_ms": 15.42,
+  "inference_latency_ms": 14.66,
   "confusion_matrix": [
     [
       5313,
@@ -123,11 +123,11 @@
     }
   ],
   "metadata": {
-    "trained_at": "2026-11-14T02:33:40.573521+00:00",
+    "trained_at": "2026-11-14T03:40:45.970280+00:00",
     "dataset": "NASA JPL AI4Mars Curated Subset",
     "training_device": "CPU (Optimized Vectorized NumPy)",
-    "total_training_time_seconds": 5.24,
-    "avg_inference_latency_ms": 15.42,
+    "total_training_time_seconds": 5.0,
+    "avg_inference_latency_ms": 14.66,
     "test_metrics": {
       "mIoU": 0.1465,
       "pixel_accuracy": 0.3459,
