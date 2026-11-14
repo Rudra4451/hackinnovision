@@ -1,17 +1,14 @@
 import React from 'react';
 import {
-  Play,
-  Pause,
-  RotateCcw,
+  Compass,
   Shield,
   Zap,
+  RotateCcw,
+  Camera,
+  Eye,
   MapPin,
-  Compass,
-  AlertTriangle,
   CheckCircle2,
-  Navigation2,
-  Layers,
-  ChevronRight,
+  AlertTriangle,
 } from 'lucide-react';
 
 export default function InteractiveRoverHUD({
@@ -23,365 +20,276 @@ export default function InteractiveRoverHUD({
   navigation,
   activeRoute,
   onSelectRoute,
-  isPlaying,
-  onPlay,
-  onPause,
-  onResume,
-  onResetRover,
-  roverProgress,
-  roverCoord,
-  currentElevation,
   navStatus,
-  error,
+  cameraMode,
+  onSetCameraMode,
+  environmentalData,
 }) {
   const currentRouteData = navigation?.[activeRoute];
   const routeSuccess = currentRouteData?.route?.success ?? false;
   const failureReason = currentRouteData?.route?.reason || null;
-  const path = currentRouteData?.route?.path || [];
-  const metrics = currentRouteData?.metrics || {};
-
-  const totalDistance = metrics.total_distance ?? 0;
-  const pathLength = path.length;
-  const maxIdx = Math.max(1, pathLength - 1);
-  const progressPct = Math.min(100, Math.round((roverProgress / maxIdx) * 100));
-  const distanceTravelled = (totalDistance * (progressPct / 100)).toFixed(1);
+  const summary = navigation?.summary;
 
   const safestMetrics = navigation?.safest?.metrics;
   const shortestMetrics = navigation?.shortest?.metrics;
 
   return (
-    <div className="telemetry-card" style={{ gap: '14px' }}>
-      {/* 1. Interactive Step-by-Step Guidance Banner */}
-      <div
-        style={{
-          background: 'var(--bg-base)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: '6px',
-          padding: '10px 12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '6px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 600, color: 'var(--rover)', letterSpacing: '0.06em' }}>
-            <Compass size={13} />
-            <span>OPERATOR DIRECTIVE</span>
-          </div>
-          <span
-            style={{
-              fontSize: '10px',
-              fontFamily: 'var(--font-mono)',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              background: navStatus === 'NAVIGATING' ? 'rgba(6, 182, 212, 0.2)' : 'var(--bg-elevated)',
-              color: navStatus === 'NAVIGATING' ? 'var(--rover)' : 'var(--text-secondary)',
-              fontWeight: 600,
-            }}
-          >
-            {navStatus}
-          </span>
+    <div className="tactical-panel" style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      {/* 1. Tactical Directives & Mission State */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: '6px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: 700, letterSpacing: '0.1em', color: 'var(--rover)' }}>
+          <Compass size={12} />
+          <span>TACTICAL DIRECTIVE</span>
         </div>
+        <span
+          style={{
+            fontSize: '9px',
+            fontFamily: 'var(--font-mono)',
+            padding: '1px 5px',
+            background: navStatus === 'NAVIGATING' ? 'rgba(6, 182, 212, 0.25)' : 'rgba(255,255,255,0.06)',
+            color: navStatus === 'NAVIGATING' ? 'var(--rover)' : 'var(--text-secondary)',
+            fontWeight: 700,
+            letterSpacing: '0.05em',
+          }}
+        >
+          {navStatus}
+        </span>
+      </div>
 
-        <div style={{ fontSize: '12px', color: 'var(--text-primary)', lineHeight: 1.4 }}>
-          {!startPoint ? (
-            <span style={{ color: '#60a5fa' }}>
-              • <strong>Step 1:</strong> Click anywhere on the 3D terrain to place the <strong>BLUE START</strong> marker.
-            </span>
-          ) : !destinationPoint ? (
-            <span style={{ color: '#fbbf24' }}>
-              • <strong>Step 2:</strong> Click on the terrain to place the <strong>YELLOW DESTINATION</strong> marker.
-            </span>
-          ) : !routeSuccess ? (
-            <span style={{ color: 'var(--hazard)' }}>
-              • <strong>Route Blocked:</strong> {failureReason || 'Target cell is inaccessible. Click to choose an alternate destination.'}
-            </span>
-          ) : (
-            <span style={{ color: 'var(--safe)' }}>
-              • <strong>Step 3:</strong> Select <strong>GREEN (Safest)</strong> or <strong>RED (Shortest)</strong> route and press <strong>PLAY</strong>.
-            </span>
-          )}
+      <div style={{ fontSize: '11px', color: 'var(--text-primary)', lineHeight: 1.35, fontFamily: 'var(--font-sans)' }}>
+        {!startPoint ? (
+          <span style={{ color: '#67e8f9' }}>
+            [1/3] CLICK TERRAIN TO DROP <strong>START PIN (CYAN)</strong>
+          </span>
+        ) : !destinationPoint ? (
+          <span style={{ color: '#fde047' }}>
+            [2/3] CLICK TERRAIN TO DROP <strong>DESTINATION PIN (AMBER)</strong>
+          </span>
+        ) : !routeSuccess ? (
+          <span style={{ color: 'var(--hazard)' }}>
+            [BLOCKED] {failureReason || 'Target cell is in an impassable volcanic fissure.'}
+          </span>
+        ) : (
+          <span style={{ color: 'var(--safe)' }}>
+            [3/3] TRAJECTORY VERIFIED. SELECT ROUTE & ENGAGE PLAY.
+          </span>
+        )}
+      </div>
+
+      {/* 2. Tactical Camera Modes (Orbit, Rover Chase, Mastcam POV) */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+        <div style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+          CAMERA CONTROLLER
+        </div>
+        <div className="mc-camera-modes">
+          <button
+            className={`mc-camera-btn ${cameraMode === 'ORBIT' ? 'active' : ''}`}
+            onClick={() => onSetCameraMode('ORBIT')}
+            title="Inspect terrain from orbit, click waypoints"
+          >
+            ORBIT
+          </button>
+          <button
+            className={`mc-camera-btn ${cameraMode === 'ROVER_CHASE' ? 'active' : ''}`}
+            onClick={() => onSetCameraMode('ROVER_CHASE')}
+            title="Follow rover from third-person chase camera"
+          >
+            CHASE CAM
+          </button>
+          <button
+            className={`mc-camera-btn ${cameraMode === 'MASTCAM_POV' ? 'active' : ''}`}
+            onClick={() => onSetCameraMode('MASTCAM_POV')}
+            title="Lock camera to Rover's Mastcam optic head"
+          >
+            MASTCAM POV
+          </button>
         </div>
       </div>
 
-      {/* 2. Marker Endpoints & Repositioning Controls */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-        {/* Blue Start Marker Chip */}
+      {/* 3. Endpoint Coordinates Module */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+        {/* Cyan Start Chip */}
         <div
           style={{
-            background: 'rgba(59, 130, 246, 0.08)',
-            border: selectionMode === 'start' ? '1px solid #3b82f6' : '1px solid rgba(59, 130, 246, 0.25)',
-            borderRadius: '6px',
-            padding: '8px 10px',
+            background: 'rgba(6, 182, 212, 0.05)',
+            border: selectionMode === 'start' ? '1px solid var(--rover)' : '1px solid rgba(6, 182, 212, 0.2)',
+            padding: '6px 8px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '4px',
+            gap: '2px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '10px', color: '#60a5fa', fontWeight: 600, letterSpacing: '0.05em' }}>
-              START (BLUE)
-            </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '9px', color: 'var(--rover)', fontWeight: 700 }}>START [CYAN]</span>
             <button
-              className="mc-btn"
-              style={{
-                padding: '1px 6px',
-                fontSize: '10px',
-                borderColor: selectionMode === 'start' ? '#3b82f6' : 'var(--border-subtle)',
-                color: selectionMode === 'start' ? '#60a5fa' : 'var(--text-secondary)',
-              }}
               onClick={() => onSetSelectionMode(selectionMode === 'start' ? 'auto' : 'start')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '9px',
+                fontFamily: 'var(--font-mono)',
+                cursor: 'pointer',
+              }}
             >
-              {selectionMode === 'start' ? 'CLICKING...' : 'REPOSITION'}
+              {selectionMode === 'start' ? 'PICKING' : 'RE-PICK'}
             </button>
           </div>
-          <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: '#93c5fd' }}>
+          <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: '#a5f3fc' }}>
             {startPoint ? `(${startPoint[0]}, ${startPoint[1]})` : 'NOT SET'}
           </span>
         </div>
 
-        {/* Yellow Destination Marker Chip */}
+        {/* Amber Destination Chip */}
         <div
           style={{
-            background: 'rgba(245, 158, 11, 0.08)',
-            border: selectionMode === 'destination' ? '1px solid #f59e0b' : '1px solid rgba(245, 158, 11, 0.25)',
-            borderRadius: '6px',
-            padding: '8px 10px',
+            background: 'rgba(245, 158, 11, 0.05)',
+            border: selectionMode === 'destination' ? '1px solid var(--caution)' : '1px solid rgba(245, 158, 11, 0.2)',
+            padding: '6px 8px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '4px',
+            gap: '2px',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontSize: '10px', color: '#fbbf24', fontWeight: 600, letterSpacing: '0.05em' }}>
-              DESTINATION (YELLOW)
-            </span>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '9px', color: 'var(--caution)', fontWeight: 700 }}>GOAL [AMBER]</span>
             <button
-              className="mc-btn"
-              style={{
-                padding: '1px 6px',
-                fontSize: '10px',
-                borderColor: selectionMode === 'destination' ? '#f59e0b' : 'var(--border-subtle)',
-                color: selectionMode === 'destination' ? '#fbbf24' : 'var(--text-secondary)',
-              }}
               onClick={() => onSetSelectionMode(selectionMode === 'destination' ? 'auto' : 'destination')}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--text-muted)',
+                fontSize: '9px',
+                fontFamily: 'var(--font-mono)',
+                cursor: 'pointer',
+              }}
             >
-              {selectionMode === 'destination' ? 'CLICKING...' : 'REPOSITION'}
+              {selectionMode === 'destination' ? 'PICKING' : 'RE-PICK'}
             </button>
           </div>
-          <span className="mono" style={{ fontSize: '12px', fontWeight: 600, color: '#fde68a' }}>
+          <span className="mono" style={{ fontSize: '11px', fontWeight: 600, color: '#fde68a' }}>
             {destinationPoint ? `(${destinationPoint[0]}, ${destinationPoint[1]})` : 'NOT SET'}
           </span>
         </div>
       </div>
 
-      {/* Reset Marker Points Button */}
-      {(startPoint || destinationPoint) && (
-        <button
-          className="mc-btn"
-          style={{ padding: '4px 10px', fontSize: '11px', alignSelf: 'flex-start' }}
-          onClick={onResetPoints}
-        >
-          <RotateCcw size={12} />
-          CLEAR / RESET ENDPOINT PINS
-        </button>
-      )}
-
-      {/* 3. Authoritative Route Selection: GREEN SAFEST vs RED SHORTEST */}
+      {/* 4. Dual-Route Tactical Selector & Delta Matrix */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-        <span className="unit-label">AUTHORITATIVE PYTHON NAVIGATION ROUTES</span>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-          {/* Green Safest Route Button */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', letterSpacing: '0.08em' }}>
+            TRAJECTORY SELECTOR
+          </span>
+          {(startPoint || destinationPoint) && (
+            <button
+              onClick={onResetPoints}
+              style={{ background: 'transparent', border: 'none', color: 'var(--text-secondary)', fontSize: '9px', cursor: 'pointer' }}
+            >
+              [CLEAR PINS]
+            </button>
+          )}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
           <button
             onClick={() => onSelectRoute('safest')}
             disabled={!navigation?.safest?.route?.success}
             style={{
-              padding: '8px 10px',
-              borderRadius: '6px',
-              border: activeRoute === 'safest' ? '2px solid var(--safe)' : '1px solid var(--border-subtle)',
-              background: activeRoute === 'safest' ? 'rgba(16, 185, 129, 0.15)' : 'var(--bg-base)',
+              padding: '6px 8px',
+              border: activeRoute === 'safest' ? '1px solid var(--safe)' : '1px solid rgba(255,255,255,0.08)',
+              background: activeRoute === 'safest' ? 'rgba(16, 185, 129, 0.12)' : 'rgba(255,255,255,0.02)',
               color: 'var(--text-primary)',
               cursor: navigation?.safest?.route?.success ? 'pointer' : 'not-allowed',
               textAlign: 'left',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px',
-              opacity: navigation?.safest?.route?.success ? 1 : 0.4,
-              transition: 'all 150ms ease-out',
+              borderRadius: 0,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--safe)', fontWeight: 600, fontSize: '11px' }}>
-              <Shield size={13} />
-              <span>GREEN ROUTE (SAFEST)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--safe)', fontWeight: 700, fontSize: '10px' }}>
+              <Shield size={11} />
+              <span>GREEN ROUTE</span>
             </div>
-            <div className="mono" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-              {safestMetrics?.total_distance ? `${safestMetrics.total_distance.toFixed(1)} m` : '—'} · {safestMetrics?.caution_steps ?? 0} caution
+            <div className="mono" style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+              {safestMetrics?.total_distance ? `${safestMetrics.total_distance.toFixed(1)} m` : '—'}
             </div>
           </button>
 
-          {/* Red Shortest Route Button */}
           <button
             onClick={() => onSelectRoute('shortest')}
             disabled={!navigation?.shortest?.route?.success}
             style={{
-              padding: '8px 10px',
-              borderRadius: '6px',
-              border: activeRoute === 'shortest' ? '2px solid var(--hazard)' : '1px solid var(--border-subtle)',
-              background: activeRoute === 'shortest' ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-base)',
+              padding: '6px 8px',
+              border: activeRoute === 'shortest' ? '1px solid var(--hazard)' : '1px solid rgba(255,255,255,0.08)',
+              background: activeRoute === 'shortest' ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255,255,255,0.02)',
               color: 'var(--text-primary)',
               cursor: navigation?.shortest?.route?.success ? 'pointer' : 'not-allowed',
               textAlign: 'left',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '4px',
-              opacity: navigation?.shortest?.route?.success ? 1 : 0.4,
-              transition: 'all 150ms ease-out',
+              borderRadius: 0,
             }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '5px', color: 'var(--hazard)', fontWeight: 600, fontSize: '11px' }}>
-              <Zap size={13} />
-              <span>RED ROUTE (SHORTEST)</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: 'var(--hazard)', fontWeight: 700, fontSize: '10px' }}>
+              <Zap size={11} />
+              <span>RED ROUTE</span>
             </div>
-            <div className="mono" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-              {shortestMetrics?.total_distance ? `${shortestMetrics.total_distance.toFixed(1)} m` : '—'} · {shortestMetrics?.caution_steps ?? 0} caution
+            <div className="mono" style={{ fontSize: '10px', color: 'var(--text-secondary)' }}>
+              {shortestMetrics?.total_distance ? `${shortestMetrics.total_distance.toFixed(1)} m` : '—'}
             </div>
           </button>
         </div>
+
+        {/* Compact Tabular Delta Matrix */}
+        {safestMetrics && shortestMetrics && (
+          <table className="mc-matrix-table" style={{ marginTop: '4px' }}>
+            <thead>
+              <tr>
+                <th>METRIC</th>
+                <th style={{ color: 'var(--safe)' }}>SAFEST</th>
+                <th style={{ color: 'var(--hazard)' }}>SHORTEST</th>
+                <th style={{ textAlign: 'right' }}>DELTA</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Distance</td>
+                <td>{safestMetrics.total_distance?.toFixed(1)}m</td>
+                <td>{shortestMetrics.total_distance?.toFixed(1)}m</td>
+                <td style={{ textAlign: 'right', color: summary?.distance_penalty_pct > 0 ? 'var(--caution)' : 'var(--safe)' }}>
+                  +{summary?.distance_penalty_pct?.toFixed(1)}%
+                </td>
+              </tr>
+              <tr>
+                <td>Risk Cost</td>
+                <td style={{ color: 'var(--safe)' }}>{safestMetrics.total_cost?.toFixed(1)}</td>
+                <td>{shortestMetrics.total_cost?.toFixed(1)}</td>
+                <td style={{ textAlign: 'right', color: 'var(--safe)' }}>
+                  -{summary?.cost_reduction_pct?.toFixed(1)}%
+                </td>
+              </tr>
+              <tr>
+                <td>Caution Steps</td>
+                <td>{safestMetrics.caution_steps ?? 0}</td>
+                <td>{shortestMetrics.caution_steps ?? 0}</td>
+                <td style={{ textAlign: 'right', color: 'var(--safe)' }}>
+                  -{summary?.caution_steps_avoided ?? 0}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* 4. Live Navigation Telemetry Dashboard Readout */}
-      <div
-        style={{
-          background: 'var(--bg-base)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: '6px',
-          padding: '12px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '10px',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border-subtle)', paddingBottom: '6px' }}>
-          <span className="section-header" style={{ marginBottom: 0 }}>
-            Live Navigation Telemetry
-          </span>
-          <span
-            className="mono"
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              color: activeRoute === 'safest' ? 'var(--safe)' : 'var(--hazard)',
-            }}
-          >
-            ACTIVE: {activeRoute.toUpperCase()}
-          </span>
-        </div>
-
-        {/* Primary KPI Grid */}
-        <div className="kpi-grid">
-          <div className="kpi-cell">
-            <span className="unit-label">CURRENT POSITION</span>
-            <span className="mono" style={{ fontSize: '13px', fontWeight: 600, color: 'var(--rover)' }}>
-              {roverCoord ? `(${roverCoord[0].toFixed(1)}, ${roverCoord[1].toFixed(1)})` : '—'}
-            </span>
-            <span className="unit-label">GRID (ROW, COL)</span>
-          </div>
-
-          <div className="kpi-cell">
-            <span className="unit-label">ELEVATION</span>
-            <span className="mono" style={{ fontSize: '13px', fontWeight: 600 }}>
-              {currentElevation !== null && currentElevation !== undefined
-                ? `${currentElevation.toFixed(1)} m`
-                : '—'}
-            </span>
-            <span className="unit-label">SURFACE Z</span>
-          </div>
-
-          <div className="kpi-cell">
-            <span className="unit-label">TRAVERSE DISTANCE</span>
-            <span className="mono" style={{ fontSize: '13px', fontWeight: 600 }}>
-              {distanceTravelled} / {totalDistance > 0 ? `${totalDistance.toFixed(1)} m` : '—'}
-            </span>
-            <span className="unit-label">METERS</span>
-          </div>
-        </div>
-
-        {/* Progress Bar & Percentage */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>
-            <span style={{ color: 'var(--text-secondary)' }}>JOURNEY COMPLETION</span>
-            <span style={{ fontWeight: 600, color: progressPct === 100 ? 'var(--safe)' : 'var(--text-primary)' }}>
-              {progressPct}%
-            </span>
-          </div>
-          <div className="mc-sim-progress-track">
-            <div
-              className="mc-sim-progress-fill"
-              style={{
-                width: `${progressPct}%`,
-                background: activeRoute === 'safest' ? 'var(--safe)' : 'var(--hazard)',
-              }}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* 5. Integrated Rover Controls: PLAY, PAUSE, RESUME, RESET */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-        <div style={{ display: 'flex', gap: '8px' }}>
-          {!isPlaying ? (
-            <button
-              className="mc-btn mc-btn-primary"
-              disabled={!routeSuccess || pathLength === 0}
-              onClick={roverProgress > 0 && roverProgress < maxIdx ? onResume : onPlay}
-              style={{
-                background: routeSuccess ? (activeRoute === 'safest' ? 'var(--safe)' : 'var(--hazard)') : 'var(--border-subtle)',
-                color: '#fff',
-                borderColor: 'transparent',
-              }}
-            >
-              <Play size={13} fill="#fff" />
-              {roverProgress > 0 && roverProgress < maxIdx ? 'RESUME' : 'PLAY'}
-            </button>
-          ) : (
-            <button className="mc-btn" onClick={onPause} style={{ color: 'var(--caution)', borderColor: 'var(--caution)' }}>
-              <Pause size={13} />
-              PAUSE
-            </button>
-          )}
-
-          <button
-            className="mc-btn"
-            disabled={roverProgress === 0 && !isPlaying}
-            onClick={onResetRover}
-          >
-            <RotateCcw size={12} />
-            RESET ROVER
-          </button>
-        </div>
-
-        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', fontFamily: 'var(--font-mono)' }}>
-          WAYPOINT: {Math.min(pathLength, Math.floor(roverProgress) + 1)} / {pathLength || 0}
-        </div>
-      </div>
-
-      {/* Failure Callout if Route is Blocked */}
-      {!routeSuccess && failureReason && (
+      {/* 5. Navigator Recommendation Box */}
+      {summary?.recommendation && (
         <div
           style={{
-            padding: '8px 12px',
-            background: 'rgba(239, 68, 68, 0.12)',
-            border: '1px solid var(--hazard)',
-            borderRadius: '6px',
-            color: 'var(--hazard)',
-            fontSize: '12px',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
+            borderLeft: '2px solid var(--safe)',
+            background: 'rgba(16, 185, 129, 0.06)',
+            padding: '6px 8px',
+            fontSize: '10px',
+            lineHeight: 1.4,
+            color: 'var(--text-secondary)',
+            fontStyle: 'italic',
           }}
         >
-          <AlertTriangle size={16} />
-          <span>Navigation Planning: {failureReason}</span>
+          &ldquo;{summary.recommendation}&rdquo;
         </div>
       )}
     </div>

@@ -135,3 +135,11 @@ export function bilinearElevation(rowFloat, colFloat, elevation, rows, cols) {
   return (1 - fr) * (1 - fc) * e00 + fr * (1 - fc) * e10 + (1 - fr) * fc * e01 + fr * fc * e11;
 }
 
+export function getInterpolatedElevation(elevation, rowFloat, colFloat) {
+  if (!elevation || !Array.isArray(elevation)) return 0;
+  const rows = elevation.length;
+  const cols = elevation[0]?.length || 0;
+  return bilinearElevation(rowFloat, colFloat, elevation, rows, cols);
+}
+
+
