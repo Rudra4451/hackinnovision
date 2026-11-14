@@ -23,10 +23,10 @@ app = FastAPI(
     version="2.0.0",
 )
 
-# Secure CORS configuration: Restrict to local dev origins when credentials are enabled
+# Secure CORS configuration: Restrict to local dev origins and Vercel domains
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app)(:[0-9]+)?$",
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
@@ -43,8 +43,12 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Mount outputs directory for safely serving obstacle alert screenshots & logs
 OUTPUTS_DIR = os.path.abspath("outputs")
-os.makedirs(os.path.join(OUTPUTS_DIR, "obstacle_alerts"), exist_ok=True)
-app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
+try:
+    os.makedirs(os.path.join(OUTPUTS_DIR, "obstacle_alerts"), exist_ok=True)
+    if os.path.exists(OUTPUTS_DIR):
+        app.mount("/outputs", StaticFiles(directory=OUTPUTS_DIR), name="outputs")
+except Exception:
+    pass
 
 # Register route modules
 app.include_router(navigation_router)

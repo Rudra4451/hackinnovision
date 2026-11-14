@@ -23,6 +23,17 @@ def test_cors_not_wildcard_with_credentials(client):
     assert response.headers.get("access-control-allow-origin") == "http://localhost:5173"
     assert response.headers.get("access-control-allow-credentials") == "true"
 
+    # Vercel domain should be allowed
+    response_vercel = client.options(
+        "/api/navigation/compare",
+        headers={
+            "Origin": "https://hackinnovision-git-main-dikshyantbehera-5655.vercel.app",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert response_vercel.status_code == 200
+    assert response_vercel.headers.get("access-control-allow-origin") == "https://hackinnovision-git-main-dikshyantbehera-5655.vercel.app"
+
     # Untrusted remote origin should NOT be allowed
     response_bad = client.options(
         "/api/navigation/compare",

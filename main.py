@@ -23,6 +23,12 @@ from terrain_intelligence import (
     TerrainPipeline,
 )
 
+# Expose FastAPI application instance for Vercel and ASGI runners
+try:
+    from backend.main import app
+except Exception:
+    app = None
+
 
 def print_banner():
     banner = r"""
