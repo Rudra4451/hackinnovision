@@ -246,7 +246,7 @@ export default function VisionScoreDashboard() {
   // 10. Export JSON Report
   const handleExportReport = () => {
     const reportData = {
-      system: 'A.R.E.S. MARS-09 VisionScore',
+      system: 'ARES VisionScore 2.0',
       timestamp: new Date().toISOString(),
       environment,
       terrainMode,
@@ -283,9 +283,9 @@ export default function VisionScoreDashboard() {
         {/* Left: Subsystem Name, Environment & Stream Toggle */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Camera size={16} color="var(--rover)" />
+            <img src="/image_57d289.png" alt="ARES Logo" style={{ height: '20px', width: 'auto', objectFit: 'contain' }} />
             <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.04em' }}>
-              VISIONSCORE 2.0
+              ARES // VISIONSCORE 2.0
             </span>
           </div>
 

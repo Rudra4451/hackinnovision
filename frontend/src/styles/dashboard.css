@@ -1,8 +1,7 @@
 /* ==========================================================================
-   A.R.E.S. MARS-09: UTILITARIAN AEROSPACE MISSION CONTROL
-   Strict Brutalist Aerospace Design Language
-   Matte #121212 | Hairline #333333 | Off-white #D4D4D4 | Muted #858585
-   Zero gradients. Zero curves. Zero glassmorphism. Zero shadows.
+   ARES: TACTICAL MISSION CONTROL HUD
+   SpaceX Flight Software & Anduril Lattice Design Language
+   100vw × 100vh Full-Bleed 3D Viewport with Floating Glassmorphic Overlays
    ========================================================================== */
 
 /* Full Viewport App Container */
@@ -11,27 +10,27 @@
   width: 100vw;
   height: 100vh;
   overflow: hidden;
-  background-color: #121212;
-  font-family: var(--font-mono) !important;
+  background-color: #06080d;
+  font-family: var(--font-sans);
   color: var(--text-primary);
   user-select: none;
 }
 
-/* 1. TOP COMMAND TELEMETRY BAR (36px height) */
+/* 1. TOP COMMAND TELEMETRY BAR (38px height) */
 .mc-top-bar {
   position: absolute;
   top: 0;
   left: 0;
   right: 0;
-  height: 36px;
-  background: #121212;
-  border-bottom: 1px solid var(--border-subtle);
+  height: 38px;
+  background: rgba(8, 11, 16, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 12px;
+  padding: 0 16px;
   z-index: 50;
-  box-shadow: none;
+  backdrop-filter: blur(12px);
 }
 
 .mc-brand-area {
@@ -41,10 +40,10 @@
 }
 
 .mc-title {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--text-primary);
 }
@@ -60,9 +59,9 @@
 .mc-env-readout {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 16px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
   color: var(--text-secondary);
 }
@@ -70,44 +69,34 @@
 .mc-env-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
 }
 
 .mc-view-switcher {
   display: flex;
-  gap: 0;
-  background: #121212;
-  border: 1px solid var(--border-subtle);
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .mc-view-btn {
-  padding: 3px 8px;
-  font-size: 10px;
-  font-family: var(--font-mono);
+  padding: 3px 10px;
+  font-size: 11px;
   font-weight: 600;
   border-radius: 0;
   border: none;
-  border-right: 1px solid var(--border-subtle);
-  background: #121212;
+  background: transparent;
   color: var(--text-secondary);
   cursor: pointer;
+  transition: all 120ms ease-out;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-
-.mc-view-btn:last-child {
-  border-right: none;
-}
-
-.mc-view-btn:hover {
-  background: #1a1a1a;
-  color: var(--text-primary);
+  letter-spacing: 0.05em;
 }
 
 .mc-view-btn.active {
-  background: var(--text-primary);
-  color: #121212;
-  font-weight: 700;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
 }
 
 /* 2. FULL-BLEED 3D VIEWPORT */
@@ -118,51 +107,73 @@
   width: 100vw;
   height: 100vh;
   z-index: 1;
-  background-color: #121212;
 }
 
-/* 3. TACTICAL RETICLE & CORNER TICKS (Brutalist Strict 1px) */
+/* 3. TACTICAL RETICLE & CORNER TICKS */
 .tactical-panel {
   position: relative;
-  background: #121212;
-  border: 1px solid var(--border-subtle);
-  border-radius: 0px !important;
-  box-shadow: none !important;
+  background: rgba(8, 11, 16, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0px;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.65);
 }
 
-/* 4. FLOATING LEFT TACTICAL STACK (340px wide) */
+.tactical-panel::before {
+  content: '';
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 6px;
+  height: 6px;
+  border-top: 2px solid var(--rover);
+  border-left: 2px solid var(--rover);
+  pointer-events: none;
+}
+
+.tactical-panel::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 6px;
+  height: 6px;
+  border-bottom: 2px solid var(--rover);
+  border-right: 2px solid var(--rover);
+  pointer-events: none;
+}
+
+/* 4. FLOATING LEFT TACTICAL STACK (320px wide) */
 .mc-left-stack {
   position: absolute;
-  top: 44px;
-  left: 10px;
-  width: 340px;
-  max-height: calc(100vh - 150px);
+  top: 48px;
+  left: 14px;
+  width: 325px;
+  max-height: calc(100vh - 170px);
   display: flex;
   flex-direction: column;
-  gap: 0;
-  border: 1px solid var(--border-subtle);
-  background: #121212;
+  gap: 10px;
   z-index: 25;
   pointer-events: auto;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
 
 /* 5. FLOATING BOTTOM DOCK: TRANSPORT CONTROLS & ELEVATION TRANSECT */
 .mc-bottom-dock {
   position: absolute;
-  bottom: 8px;
-  left: 10px;
-  right: 10px;
-  height: 96px;
+  bottom: 12px;
+  left: 14px;
+  right: 14px;
+  height: 106px;
   z-index: 30;
   pointer-events: auto;
   display: grid;
-  grid-template-columns: 280px 1fr 280px;
-  gap: 0;
-  border: 1px solid var(--border-subtle);
-  background: #121212;
+  grid-template-columns: 290px 1fr 280px;
+  gap: 12px;
   align-items: center;
-  padding: 0;
+  padding: 10px 16px;
 }
 
 @media (max-width: 1180px) {
@@ -178,86 +189,100 @@
 .mc-transport-cluster {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 8px 12px;
-  border-right: 1px solid var(--border-subtle);
-  height: 100%;
-  justify-content: center;
+  gap: 8px;
 }
 
 .mc-btn-group {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
+}
+
+.mc-tactical-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 12px;
+  border-radius: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 120ms ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.mc-tactical-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.mc-tactical-btn.active {
+  background: var(--rover);
+  border-color: var(--rover);
+  color: #06080d;
+  font-weight: 700;
+}
+
+.mc-tactical-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
 }
 
 /* Speed Selector Tabs */
 .mc-speed-selector {
   display: inline-flex;
-  background: #121212;
-  border: 1px solid var(--border-subtle);
-  margin-left: 4px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 1px;
 }
 
 .mc-speed-btn {
-  padding: 3px 6px;
+  padding: 2px 7px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
   color: var(--text-secondary);
-  background: #121212;
+  background: transparent;
   border: none;
-  border-right: 1px solid var(--border-subtle);
   border-radius: 0;
   cursor: pointer;
 }
 
-.mc-speed-btn:last-child {
-  border-right: none;
-}
-
 .mc-speed-btn.active {
-  background: var(--text-primary);
-  color: #121212;
-  font-weight: 700;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+  font-weight: 600;
 }
 
 /* Camera Mode Selector Module */
 .mc-camera-modes {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 0;
-  border: 1px solid var(--border-subtle);
+  display: flex;
+  gap: 4px;
 }
 
 .mc-camera-btn {
-  padding: 5px 4px;
+  flex: 1;
+  padding: 5px 6px;
   font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 600;
+  font-size: 10px;
   text-align: center;
-  background: #121212;
-  border: none;
-  border-right: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   color: var(--text-secondary);
   cursor: pointer;
   border-radius: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.mc-camera-btn:last-child {
-  border-right: none;
-}
-
-.mc-camera-btn:hover {
-  background: #1a1a1a;
-  color: var(--text-primary);
+  transition: all 100ms;
 }
 
 .mc-camera-btn.active {
-  background: var(--nominal);
-  color: #121212;
-  font-weight: 700;
+  background: rgba(6, 182, 212, 0.2);
+  border-color: var(--rover);
+  color: var(--rover);
+  font-weight: 600;
 }
 
 /* Elevation Transect Dock Center */
@@ -266,88 +291,101 @@
   flex-direction: column;
   justify-content: center;
   height: 100%;
-  padding: 6px 12px;
-  border-right: 1px solid var(--border-subtle);
-}
-
-.mc-bottom-dock-right {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 8px 12px;
-  font-size: 10px;
-  font-family: var(--font-mono);
 }
 
 /* Floating Right Status / Legend Corner */
 .mc-floating-status {
   position: absolute;
-  top: 44px;
-  right: 10px;
+  top: 48px;
+  right: 14px;
   width: 250px;
   z-index: 25;
   pointer-events: auto;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  padding: 8px 10px;
-  background: #121212;
-  border: 1px solid var(--border-subtle);
+  padding: 10px 12px;
+}
+
+/* Compact Tabular Metrics */
+.mc-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mc-matrix-table th {
+  text-align: left;
+  padding: 4px 2px;
+  color: var(--text-muted);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  font-weight: 500;
+}
+
+.mc-matrix-table td {
+  padding: 5px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+}
+
+.mc-matrix-table tr.active td {
+  color: var(--text-primary);
+  font-weight: 600;
 }
 
 /* Overlays Toolbar for Topographic View */
 .mc-overlay-toolbar {
   position: absolute;
-  top: 44px;
-  left: 10px;
+  top: 48px;
+  left: 14px;
   z-index: 25;
-  background: #121212;
-  border: 1px solid var(--border-subtle);
+  background: rgba(8, 11, 16, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 0px;
-  padding: 6px 10px;
+  padding: 8px 12px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  box-shadow: none;
+  gap: 12px;
+  backdrop-filter: blur(10px);
 }
 
 .mc-toolbar-item {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  font-size: 10px;
+  gap: 6px;
+  font-size: 11px;
   font-family: var(--font-mono);
   color: var(--text-secondary);
   cursor: pointer;
 }
 
 .mc-toolbar-item input[type="checkbox"] {
-  accent-color: var(--nominal);
+  accent-color: var(--safe);
   cursor: pointer;
-  border-radius: 0;
 }
 
 .mc-exaggeration-slider {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 9px;
+  gap: 8px;
+  font-size: 10px;
   color: var(--text-secondary);
   font-family: var(--font-mono);
 }
 
 .mc-exaggeration-slider input[type="range"] {
-  width: 65px;
-  accent-color: var(--text-primary);
+  width: 70px;
+  accent-color: var(--rover);
   cursor: pointer;
 }
 
 .mc-badge-scale {
-  background: #1e1e1e;
+  background: rgba(255, 255, 255, 0.1);
   color: var(--text-primary);
   font-size: 9px;
   font-family: var(--font-mono);
-  padding: 1px 4px;
-  border: 1px solid var(--border-subtle);
+  padding: 1px 5px;
 }

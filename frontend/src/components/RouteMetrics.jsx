@@ -135,7 +135,7 @@ export default function RouteMetrics({ routeComparison }) {
       <div className="route-tradeoff-banner">
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--cyan-safe)', fontWeight: 600, fontSize: '0.8rem', textTransform: 'uppercase' }}>
           <Shield size={14} />
-          MARS-09 Flight Controller Recommendation
+          ARES Flight Controller Recommendation
         </div>
         <p style={{ marginTop: '0.4rem', fontSize: '0.82rem', lineHeight: 1.5, color: 'var(--text-secondary)' }}>
           {summary?.recommendation}

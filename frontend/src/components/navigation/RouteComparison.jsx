@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronUp, GitCompare, Shield, Zap } from 'lucide-react';
+import { ChevronDown, ChevronUp, GitCompare, Shield, Zap, CheckCircle2 } from 'lucide-react';
 
 export default function RouteComparison({ navigation }) {
   const [isOpen, setIsOpen] = useState(true);
@@ -24,15 +24,7 @@ export default function RouteComparison({ navigation }) {
   const cautionAvoided = summary.caution_steps_avoided;
 
   return (
-    <div
-      style={{
-        padding: '0',
-        overflow: 'hidden',
-        background: '#121212',
-        border: '1px solid #333333',
-        fontFamily: "'JetBrains Mono', monospace",
-      }}
-    >
+    <div className="telemetry-card" style={{ padding: '0', overflow: 'hidden' }}>
       {/* Collapsible Header */}
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -41,135 +33,130 @@ export default function RouteComparison({ navigation }) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          background: '#161616',
+          background: 'transparent',
           border: 'none',
-          borderBottom: isOpen ? '1px solid #333333' : 'none',
-          padding: '8px 12px',
+          padding: '10px 14px',
           cursor: 'pointer',
-          color: '#D4D4D4',
-          textAlign: 'left',
+          color: 'var(--text-primary)',
+          textAlign: 'left'
         }}
         aria-expanded={isOpen}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <GitCompare size={13} color="#0284C7" />
-          <span style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            A.R.E.S. TRAJECTORY COMPARISON
+        <div style={{ display: 'flex', alignContent: 'center', alignItems: 'center', gap: '8px' }}>
+          <GitCompare size={14} color="var(--accent-info)" />
+          <span className="section-header" style={{ marginBottom: 0 }}>
+            Route Comparison
           </span>
           <span
             style={{
-              fontSize: '9px',
+              fontSize: '10px',
               fontFamily: 'var(--font-mono)',
-              border: '1px solid #0284C7',
-              color: '#0284C7',
-              padding: '1px 5px',
-              fontWeight: 700,
+              background: 'rgba(16, 185, 129, 0.15)',
+              color: 'var(--safe)',
+              padding: '2px 6px',
+              borderRadius: '4px',
+              fontWeight: 600
             }}
           >
-            DUAL REACHABLE
+            BOTH REACHABLE
           </span>
         </div>
-        <div style={{ color: '#858585' }}>
-          {isOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        <div style={{ color: 'var(--text-secondary)' }}>
+          {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
       </button>
 
       {/* Collapsible Drawer Content */}
       {isOpen && (
-        <div style={{ padding: '8px 12px 12px 12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {/* Comparison Table with Visible Borders */}
+        <div style={{ padding: '0 14px 14px 14px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Comparison Table */}
           <div style={{ overflowX: 'auto' }}>
             <table
-              className="ares-table"
               style={{
                 width: '100%',
                 borderCollapse: 'collapse',
-                border: '1px solid #333333',
-                fontSize: '10px',
-                fontFamily: 'var(--font-mono)',
+                fontSize: '11px',
+                fontFamily: 'var(--font-mono)'
               }}
             >
               <thead>
-                <tr style={{ background: '#181818' }}>
-                  <th style={{ border: '1px solid #333333', padding: '5px 8px', fontWeight: 600, color: '#858585' }}>
-                    METRIC
-                  </th>
-                  <th style={{ border: '1px solid #333333', padding: '5px 8px', fontWeight: 600, color: '#0284C7' }}>
+                <tr style={{ borderBottom: '1px solid var(--border-subtle)', textAlign: 'left', color: 'var(--text-secondary)' }}>
+                  <th style={{ padding: '6px 4px', fontWeight: 500 }}>METRIC</th>
+                  <th style={{ padding: '6px 4px', fontWeight: 500, color: 'var(--safe)' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
                       <Shield size={10} /> SAFEST
                     </span>
                   </th>
-                  <th style={{ border: '1px solid #333333', padding: '5px 8px', fontWeight: 600, color: '#DC2626' }}>
+                  <th style={{ padding: '6px 4px', fontWeight: 500, color: 'var(--text-primary)' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}>
-                      <Zap size={10} /> SHORTEST
+                      <Zap size={10} color="var(--hazard)" /> SHORTEST
                     </span>
                   </th>
-                  <th style={{ border: '1px solid #333333', padding: '5px 8px', fontWeight: 600, textAlign: 'right', color: '#D4D4D4' }}>
-                    DELTA
-                  </th>
+                  <th style={{ padding: '6px 4px', fontWeight: 500, textAlign: 'right' }}>DELTA</th>
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#858585' }}>Distance</td>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#D4D4D4' }}>{formatNum(safeM.total_distance, 1, 'm')}</td>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#D4D4D4' }}>{formatNum(shortM.total_distance, 1, 'm')}</td>
+                {/* Distance */}
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>Distance</td>
+                  <td style={{ padding: '6px 4px', color: 'var(--text-primary)' }}>{formatNum(safeM.total_distance, 1, 'm')}</td>
+                  <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>{formatNum(shortM.total_distance, 1, 'm')}</td>
                   <td
                     style={{
-                      border: '1px solid #333333',
-                      padding: '5px 8px',
+                      padding: '6px 4px',
                       textAlign: 'right',
-                      color: distPen > 0 ? '#D97706' : '#0284C7',
-                      fontWeight: 600,
+                      color: distPen > 0 ? 'var(--caution)' : 'var(--safe)',
+                      fontWeight: 600
                     }}
                   >
                     {distPen > 0 ? `+${formatNum(distPen, 1)}%` : `${formatNum(distPen, 1)}%`}
                   </td>
                 </tr>
 
-                <tr>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#858585' }}>Risk Cost</td>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#0284C7', fontWeight: 600 }}>{formatNum(safeM.total_cost, 1)}</td>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#DC2626', fontWeight: 600 }}>{formatNum(shortM.total_cost, 1)}</td>
+                {/* Accumulated Cost */}
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>Cost</td>
+                  <td style={{ padding: '6px 4px', color: 'var(--safe)', fontWeight: 600 }}>{formatNum(safeM.total_cost, 1)}</td>
+                  <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>{formatNum(shortM.total_cost, 1)}</td>
                   <td
                     style={{
-                      border: '1px solid #333333',
-                      padding: '5px 8px',
+                      padding: '6px 4px',
                       textAlign: 'right',
-                      color: costRed > 0 ? '#0284C7' : '#858585',
-                      fontWeight: 600,
+                      color: costRed > 0 ? 'var(--safe)' : 'var(--text-secondary)',
+                      fontWeight: 600
                     }}
                   >
                     {costRed > 0 ? `-${formatNum(costRed, 1)}%` : '0%'}
                   </td>
                 </tr>
 
-                <tr>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#858585' }}>Caution Cells</td>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: safeM.caution_steps > 0 ? '#D97706' : '#0284C7' }}>
+                {/* Caution Steps */}
+                <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                  <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>Caution Steps</td>
+                  <td style={{ padding: '6px 4px', color: safeM.caution_steps > 0 ? 'var(--caution)' : 'var(--safe)' }}>
                     {safeM.caution_steps ?? 0}
                   </td>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: shortM.caution_steps > 0 ? '#D97706' : '#858585' }}>
+                  <td style={{ padding: '6px 4px', color: shortM.caution_steps > 0 ? 'var(--caution)' : 'var(--text-secondary)' }}>
                     {shortM.caution_steps ?? 0}
                   </td>
                   <td
                     style={{
-                      border: '1px solid #333333',
-                      padding: '5px 8px',
+                      padding: '6px 4px',
                       textAlign: 'right',
-                      color: cautionAvoided > 0 ? '#0284C7' : '#858585',
-                      fontWeight: 600,
+                      color: cautionAvoided > 0 ? 'var(--safe)' : 'var(--text-secondary)',
+                      fontWeight: 600
                     }}
                   >
-                    {cautionAvoided > 0 ? `-${cautionAvoided}` : '0'}
+                    {cautionAvoided > 0 ? `-${cautionAvoided} avoided` : '0'}
                   </td>
                 </tr>
 
+                {/* Avg Terrain Cost */}
                 <tr>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#858585' }}>Avg Cost</td>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#D4D4D4' }}>{formatNum(safeM.avg_terrain_cost, 2)}</td>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', color: '#D4D4D4' }}>{formatNum(shortM.avg_terrain_cost, 2)}</td>
-                  <td style={{ border: '1px solid #333333', padding: '5px 8px', textAlign: 'right', color: '#858585' }}>
+                  <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>Avg Cost</td>
+                  <td style={{ padding: '6px 4px', color: 'var(--text-primary)' }}>{formatNum(safeM.avg_terrain_cost, 2)}</td>
+                  <td style={{ padding: '6px 4px', color: 'var(--text-secondary)' }}>{formatNum(shortM.avg_terrain_cost, 2)}</td>
+                  <td style={{ padding: '6px 4px', textAlign: 'right', color: 'var(--text-secondary)' }}>
                     {safeM.avg_terrain_cost && shortM.avg_terrain_cost
                       ? (safeM.avg_terrain_cost - shortM.avg_terrain_cost < 0 ? '-' : '+') +
                         Math.abs(safeM.avg_terrain_cost - shortM.avg_terrain_cost).toFixed(2)
@@ -180,21 +167,28 @@ export default function RouteComparison({ navigation }) {
             </table>
           </div>
 
-          {/* Quoted Recommendation Callout Box */}
+          {/* Quoted Recommendation Callout Box (§5.3) */}
           {summary.recommendation && (
             <div
               style={{
-                borderLeft: '2px solid #0284C7',
-                background: '#161616',
-                border: '1px solid #333333',
-                borderLeftWidth: '2px',
-                padding: '6px 10px',
-                fontSize: '10px',
-                lineHeight: 1.4,
-                color: '#858585',
+                borderLeft: '3px solid var(--safe)',
+                background: 'rgba(16, 185, 129, 0.08)',
+                padding: '8px 12px',
+                borderRadius: '0 4px 4px 0',
+                border: '1px solid rgba(16, 185, 129, 0.2)',
+                borderLeftWidth: '3px',
+                fontSize: '11px',
+                lineHeight: 1.5,
+                color: 'var(--text-primary)'
               }}
             >
-              &ldquo;{summary.recommendation}&rdquo;
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '2px', color: 'var(--safe)', fontWeight: 600, fontSize: '10px' }}>
+                <CheckCircle2 size={12} />
+                <span>MISSION NAVIGATOR RECOMMENDATION</span>
+              </div>
+              <span style={{ fontStyle: 'italic' }}>
+                &ldquo;{summary.recommendation}&rdquo;
+              </span>
             </div>
           )}
         </div>
