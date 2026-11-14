@@ -62,7 +62,7 @@ export default function TerrainThreeMap({
   // Spline Traversal & Continuous Kinematics Ref
   const splineRef = useRef(null);
   const uRef = useRef(0.0);
-  const lastRoverPosRef = useRef({ r: 5, c: 5, heading: 0 });
+  const lastRoverPosRef = useRef({ r: 15, c: 15, heading: 0 });
 
   // State mirror refs for continuous 60+ FPS animation loop
   const isPlayingRef = useRef(isPlaying);
@@ -96,15 +96,16 @@ export default function TerrainThreeMap({
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
 
-    // Scene with deep Martian space background & thin atmospheric fog
+    // Scene with deep Martian space background & calibrated atmospheric fog
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x06080d);
-    scene.fog = new THREE.FogExp2(0x06080d, 0.0028); // Tuned for 200x200 scale
+    // Linear fog: zero fog within 180 units of camera, gentle distant horizon fade
+    scene.fog = new THREE.Fog(0x06080d, 180, 750);
     sceneRef.current = scene;
 
-    // Camera (expanded far clip for 200x200 sector)
-    const camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 2000);
-    camera.position.set(0, 95, 125);
+    // Camera (expanded view angle and depth for 200x200 sector)
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.5, 2500);
+    camera.position.set(0, 185, 195);
     cameraRef.current = camera;
 
     // WebGL Renderer
@@ -118,46 +119,47 @@ export default function TerrainThreeMap({
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.25;
+    renderer.toneMappingExposure = 1.35;
 
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // OrbitControls
+    // OrbitControls: framed to view entire 200x200 Martian exploration sector
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.maxPolarAngle = Math.PI / 2 - 0.04;
     controls.minDistance = 4;
-    controls.maxDistance = 500;
-    controls.target.set(0, 4, 0);
+    controls.maxDistance = 1200;
+    controls.target.set(0, 5, 0);
     controlsRef.current = controls;
 
-    // Lighting: Sun + Sky Atmosphere + Horizon Fill
-    const ambientLight = new THREE.AmbientLight(0xffecd9, 0.45);
+    // High-visibility Tactical Lighting
+    const ambientLight = new THREE.AmbientLight(0xffeedd, 0.75);
     scene.add(ambientLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffa07a, 0x090b10, 0.55);
+    const hemiLight = new THREE.HemisphereLight(0xffb592, 0x181a20, 0.7);
     scene.add(hemiLight);
 
-    const sunLight = new THREE.DirectionalLight(0xfff3e6, 1.45);
-    sunLight.position.set(120, 160, 90);
+    const sunLight = new THREE.DirectionalLight(0xfff5ea, 1.8);
+    sunLight.position.set(100, 160, 80);
     sunLight.castShadow = true;
     sunLight.shadow.mapSize.width = 2048;
     sunLight.shadow.mapSize.height = 2048;
-    sunLight.shadow.camera.near = 20;
-    sunLight.shadow.camera.far = 480;
-    sunLight.shadow.camera.left = -130;
-    sunLight.shadow.camera.right = 130;
-    sunLight.shadow.camera.top = 130;
-    sunLight.shadow.camera.bottom = -130;
-    sunLight.shadow.bias = -0.0005;
+    sunLight.shadow.camera.near = 10;
+    sunLight.shadow.camera.far = 450;
+    sunLight.shadow.camera.left = -140;
+    sunLight.shadow.camera.right = 140;
+    sunLight.shadow.camera.top = 140;
+    sunLight.shadow.camera.bottom = -140;
+    sunLight.shadow.bias = 0.0008; // Positive bias prevents shadow acne
     scene.add(sunLight);
 
-    const horizonLight = new THREE.DirectionalLight(0xd97757, 0.55);
-    horizonLight.position.set(-110, 25, -90);
-    scene.add(horizonLight);
+    // Warm opposite fill light so shadowed slopes are always clear and legible
+    const fillLight = new THREE.DirectionalLight(0xd97757, 0.85);
+    fillLight.position.set(-100, 45, -90);
+    scene.add(fillLight);
 
     // Rover Controller Instance
     const roverController = new MarsRoverController();
@@ -355,11 +357,9 @@ export default function TerrainThreeMap({
       if (devils.length > 0) {
         devils.forEach((vortex) => {
           vortex.mesh.rotation.y += vortex.spinSpeed * deltaSec;
-          // Drift slowly along wind vector
           vortex.mesh.position.x += vortex.driftX * deltaSec;
           vortex.mesh.position.z += vortex.driftZ * deltaSec;
 
-          // Wrap boundary
           if (vortex.mesh.position.x > 95) vortex.mesh.position.x = -95;
           if (vortex.mesh.position.z > 95) vortex.mesh.position.z = -95;
         });
@@ -414,8 +414,8 @@ export default function TerrainThreeMap({
         controls.update();
       }
 
-      // Camera state sync for 2D Radar Minimap
-      if (now - lastCameraSyncTime >= 90 && onCameraUpdateRef.current) {
+      // Camera state sync for 2D Radar Minimap (Throttled to 500ms to eliminate React churn)
+      if (now - lastCameraSyncTime >= 500 && onCameraUpdateRef.current) {
         lastCameraSyncTime = now;
         onCameraUpdateRef.current({
           pos: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
@@ -462,7 +462,7 @@ export default function TerrainThreeMap({
     const camera = cameraRef.current;
     if (controls && camera) {
       controls.target.set(x, y + 2, z);
-      camera.position.set(x, y + 45, z + 55);
+      camera.position.set(x, y + 55, z + 65);
       controls.update();
     }
   }, [focusTarget, dem]);
@@ -513,13 +513,13 @@ export default function TerrainThreeMap({
     const vertexCount = posAttr.count;
     const colors = new Float32Array(vertexCount * 3);
 
-    // Realistic Martian Mineral Colors
-    const colorBasaltRift = new THREE.Color(0x190f0c); // Dark volcanic basalt
-    const colorIronOxide = new THREE.Color(0x823423); // Weathered ferric oxide
-    const colorDustyOrange = new THREE.Color(0xb85938); // Windblown dust dune
-    const colorPaleMineral = new THREE.Color(0xdfab82); // High-altitude silica ridge
-    const colorMagmaVein = new THREE.Color(0xff4500); // Active volcanic lava fissure
-    const colorCautionAmber = new THREE.Color(0xd97706); // High-slip caution / sand trap
+    // Realistic Martian Mineral Colors (Rich, warm, highly legible palette)
+    const colorBasaltRift = new THREE.Color(0x3a2216);   // Deep warm volcanic basalt
+    const colorIronOxide = new THREE.Color(0x943d2b);    // Weathered Martian ferric oxide
+    const colorDustyOrange = new THREE.Color(0xcb6e49);  // Windblown dust dune
+    const colorPaleMineral = new THREE.Color(0xdfab82);  // High-altitude silica ridge
+    const colorMagmaVein = new THREE.Color(0xff3700);    // Active volcanic lava fissure
+    const colorCautionAmber = new THREE.Color(0xf59e0b); // High-slip caution / sand trap
 
     const vents = [];
     const scarpCells = [];
@@ -574,19 +574,25 @@ export default function TerrainThreeMap({
       colors[i * 3 + 2] = vertColor.b;
     }
 
+    // Critical Three.js buffer updates & bounding sphere computation
+    posAttr.needsUpdate = true;
     geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
     geom.computeVertexNormals();
+    geom.computeBoundingBox();
+    geom.computeBoundingSphere();
 
     const mat = new THREE.MeshStandardMaterial({
       vertexColors: true,
-      roughness: 0.85,
-      metalness: 0.15,
+      roughness: 0.8,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
       flatShading: false,
     });
 
     const terrainMesh = new THREE.Mesh(geom, mat);
     terrainMesh.receiveShadow = true;
-    terrainMesh.castShadow = true;
+    terrainMesh.castShadow = false; // Never cast shadows on self to eliminate shadow acne
+    terrainMesh.frustumCulled = false;
     terrainMesh.name = 'MarsRealisticTerrain';
     scene.add(terrainMesh);
     terrainMeshRef.current = terrainMesh;
@@ -870,12 +876,12 @@ export default function TerrainThreeMap({
     cone.castShadow = true;
     group.add(cone);
 
-    const laserGeom = new THREE.CylinderGeometry(0.06, 0.06, 60, 8);
-    laserGeom.translate(0, 30, 0);
+    const laserGeom = new THREE.CylinderGeometry(0.12, 0.12, 90, 8);
+    laserGeom.translate(0, 45, 0);
     const laserMat = new THREE.MeshBasicMaterial({
       color: hexColor,
       transparent: true,
-      opacity: 0.55,
+      opacity: 0.75,
       blending: THREE.AdditiveBlending,
     });
     const laser = new THREE.Mesh(laserGeom, laserMat);
@@ -967,11 +973,11 @@ export default function TerrainThreeMap({
     }
 
     const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal', 0.25);
-    const tubeGeom = new THREE.TubeGeometry(curve, points.length * 4, 0.24, 8, false);
+    const tubeGeom = new THREE.TubeGeometry(curve, points.length * 4, 0.52, 8, false);
     const tubeMat = new THREE.MeshStandardMaterial({
       color: hexColor,
       emissive: hexColor,
-      emissiveIntensity: 0.75,
+      emissiveIntensity: 0.85,
       roughness: 0.2,
       metalness: 0.8,
     });
@@ -1007,7 +1013,7 @@ export default function TerrainThreeMap({
     // 1. Shortest Route in RED (#EF4444)
     const shortestData = navigation.shortest?.route;
     if (shortestData?.success && shortestData.path?.length > 1) {
-      const red = buildRouteMesh(shortestData.path, dem.elevation, dem.rows, dem.cols, 0xef4444, 0.28);
+      const red = buildRouteMesh(shortestData.path, dem.elevation, dem.rows, dem.cols, 0xef4444, 0.38);
       if (red) {
         scene.add(red.mesh);
         redRouteLineRef.current = red.mesh;
@@ -1017,7 +1023,7 @@ export default function TerrainThreeMap({
     // 2. Safest Practical Route in GREEN (#10B981)
     const safestData = navigation.safest?.route;
     if (safestData?.success && safestData.path?.length > 1) {
-      const green = buildRouteMesh(safestData.path, dem.elevation, dem.rows, dem.cols, 0x10b981, 0.36);
+      const green = buildRouteMesh(safestData.path, dem.elevation, dem.rows, dem.cols, 0x10b981, 0.46);
       if (green) {
         scene.add(green.mesh);
         greenRouteLineRef.current = green.mesh;
