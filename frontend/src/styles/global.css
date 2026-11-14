@@ -1,170 +1,210 @@
 :root {
-  /* Semantic Tokens per §2.1 */
-  --bg-base: #070B12;
-  --bg-panel: #0E1522;
-  --bg-elevated: #111A2B;
-  --border-subtle: #1E293B;
-  --border-active: #334155;
-  --text-primary: #E2E8F0;
-  --text-secondary: #94A3B8;
-  --text-muted: #475569;
-  --safe: #10B981;
-  --hazard: #EF4444;
-  --rover: #06B6D4;
-  --caution: #F59E0B;
-  --accent-info: #6366F1;
+  /* ==========================================================================
+     A.R.E.S. UTILITARIAN AEROSPACE / BRUTALIST TOKENS
+     Zero gradients. Zero curves. Zero glassmorphism. Zero neon glow.
+     ========================================================================== */
+  --bg-base: #121212;
+  --bg-panel: #121212;
+  --bg-elevated: #181818;
+  --border-subtle: #333333;
+  --border-active: #555555;
+  --text-primary: #D4D4D4;
+  --text-secondary: #858585;
+  --text-muted: #555555;
+  
+  /* Utilitarian Aerospace Accents */
+  --nominal: #0284C7;      /* Flat Sky Blue (Nominal) */
+  --safe: #0284C7;         /* Nominal / Safest Trajectory */
+  --caution: #D97706;      /* Flat Amber (Caution / Detour) */
+  --hazard: #DC2626;       /* Flat Crimson (Hazard / Alert / Shortest) */
+  --rover: #D4D4D4;        /* Off-white monochrome */
+  --accent-info: #0284C7;
 
-  /* Typography per §2.2 */
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  /* Typography: Force Strict Monospace Globally */
+  --font-sans: 'JetBrains Mono', 'IBM Plex Mono', 'Space Mono', monospace;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', 'Space Mono', monospace;
 }
 
-* {
+/* Enforce Zero Curves, Monospace & Box Model Globally */
+*, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  border-radius: 0px !important;
+  font-family: var(--font-mono) !important;
+  font-feature-settings: "tnum" 1, "zero" 1;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
 }
 
-body {
+html, body {
   background-color: var(--bg-base);
   color: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
+  font-size: 12px;
+  line-height: 1.45;
   min-height: 100vh;
   overflow-x: hidden;
+  user-select: none;
 }
 
-/* Scrollbars */
+/* Square Gray Scrollbars: Native Curves Hidden */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
+
 ::-webkit-scrollbar-track {
   background: var(--bg-base);
-}
-::-webkit-scrollbar-thumb {
-  background: var(--border-active);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-muted);
+  border: 1px solid var(--border-subtle);
 }
 
-/* Typography Classes */
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 0px !important;
+  border: none;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-active);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-subtle) var(--bg-base);
+}
+
+/* Strict Typography Classes */
 .section-header {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.12em;
   color: var(--text-secondary);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 4px;
+  margin-bottom: 6px;
 }
 
 .panel-title {
-  font-family: var(--font-sans);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--text-primary);
 }
 
 .mono {
-  font-family: var(--font-mono);
+  font-family: var(--font-mono) !important;
+  font-variant-numeric: tabular-nums;
 }
 
 .kpi-number {
-  font-family: var(--font-mono);
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--text-primary);
   line-height: 1.1;
+  font-variant-numeric: tabular-nums;
 }
 
 .unit-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 400;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--text-secondary);
 }
 
-/* Restrained Panels (No glow, no glassmorphism per §2.3) */
-.mc-panel {
+/* Utilitarian Brutalist Panels: Sharp 1px Hairline Borders, Zero Curves, Zero Shadow */
+.mc-panel, .tactical-panel, .telemetry-card {
   background: var(--bg-panel);
   border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 16px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
-  transition: border-color 150ms ease-out;
+  border-radius: 0px !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
 }
 
-.mc-panel:hover {
-  border-color: var(--border-active);
-}
-
-/* Buttons */
-.mc-btn {
+/* Harsh Rectangular Buttons */
+.mc-btn, .mc-tactical-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: var(--bg-elevated);
+  background: var(--bg-base);
   color: var(--text-primary);
   border: 1px solid var(--border-subtle);
-  border-radius: 4px;
-  padding: 6px 12px;
-  font-family: var(--font-sans);
-  font-size: 13px;
-  font-weight: 500;
+  border-radius: 0px !important;
+  padding: 5px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: background-color 150ms ease-out, border-color 150ms ease-out, color 150ms ease-out;
+  transition: none !important;
+  box-shadow: none !important;
 }
 
-.mc-btn:hover:not(:disabled) {
-  background: var(--border-active);
-  border-color: var(--text-secondary);
-}
-
-.mc-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.mc-btn-active {
-  background: var(--border-active);
+.mc-btn:hover:not(:disabled), .mc-tactical-btn:hover:not(:disabled) {
+  background: var(--text-primary);
+  color: var(--bg-base);
   border-color: var(--text-primary);
+}
+
+.mc-btn:disabled, .mc-tactical-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+  border-color: var(--border-subtle);
+}
+
+.mc-btn-active, .mc-tactical-btn.active {
+  background: var(--nominal);
+  border-color: var(--nominal);
+  color: #121212;
+  font-weight: 700;
+}
+
+/* Strict Literal Table Metrics */
+.mc-matrix-table, table.ares-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--border-subtle);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  background: var(--bg-panel);
+}
+
+.mc-matrix-table th, table.ares-table th {
+  text-align: left;
+  padding: 5px 6px;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+  background: #181818;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mc-matrix-table td, table.ares-table td {
+  padding: 5px 6px;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+}
+
+.mc-matrix-table tr.active td {
+  background: #1c1c1c;
   color: #FFFFFF;
 }
 
-/* Pulsing Rover Animation per §2.6 */
-@keyframes rover-pulse {
-  0%, 100% {
-    opacity: 1;
-    transform: scale(1);
-  }
-  50% {
-    opacity: 0.65;
-    transform: scale(1.15);
-  }
-}
-
-.rover-pulsing {
-  animation: rover-pulse 2s ease-in-out infinite;
-}
-
-/* Status Blink Animation per §2.6 */
-@keyframes status-blink {
-  0%, 100% {
-    opacity: 1;
-  }
-  50% {
-    opacity: 0.3;
-  }
-}
-
+/* Strict Status Indicators */
 .status-blinking {
-  animation: status-blink 1.2s ease-in-out infinite;
+  animation: ares-blink 1s steps(2, start) infinite;
+}
+
+@keyframes ares-blink {
+  to {
+    visibility: hidden;
+  }
 }

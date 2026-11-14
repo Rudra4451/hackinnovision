@@ -12,7 +12,7 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('[MARS-09] Component boundary caught error:', error, errorInfo);
+    console.error('[A.R.E.S.] Component boundary caught error:', error, errorInfo);
   }
 
   render() {
@@ -20,29 +20,30 @@ export default class ErrorBoundary extends React.Component {
       return (
         <div
           style={{
-            padding: '24px',
-            margin: '16px',
-            background: 'var(--bg-panel)',
-            border: '1px solid var(--hazard)',
-            borderRadius: '8px',
-            color: 'var(--text-primary)',
+            padding: '16px',
+            margin: '12px',
+            background: '#1a1010',
+            border: '1px solid #DC2626',
+            borderRadius: '0px',
+            color: '#D4D4D4',
+            fontFamily: "'JetBrains Mono', monospace",
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--hazard)', marginBottom: '8px' }}>
-            <AlertOctagon size={20} />
-            <span style={{ fontWeight: 600, fontSize: '15px' }}>
-              {this.props.fallbackTitle || 'Component Execution Failure'}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#DC2626', marginBottom: '6px' }}>
+            <AlertOctagon size={16} />
+            <span style={{ fontWeight: 700, fontSize: '13px', textTransform: 'uppercase' }}>
+              [MODULE CRASH] {this.props.fallbackTitle || 'SUBSYSTEM EXECUTION FAILURE'}
             </span>
           </div>
-          <p style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+          <p style={{ fontSize: '11px', color: '#858585' }}>
             {this.state.error?.message || 'An unexpected rendering error occurred in this module.'}
           </p>
           <button
             className="mc-btn"
-            style={{ marginTop: '12px', fontSize: '12px' }}
+            style={{ marginTop: '10px', fontSize: '10px' }}
             onClick={() => this.setState({ hasError: false, error: null })}
           >
-            RESET MODULE
+            [ REINITIALIZE MODULE ]
           </button>
         </div>
       );

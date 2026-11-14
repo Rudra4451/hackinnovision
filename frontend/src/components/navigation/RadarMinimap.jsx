@@ -1,11 +1,10 @@
 import React, { useRef, useEffect, useCallback } from 'react';
 
 /**
- * 2D Tactical Radar Minimap Component
- * Renders 200x200 Martian DEM elevation relief, color-coded hazard zones,
- * green/red route overlays, live rover position with heading reticle,
- * and camera frustum cone.
- * Clicking anywhere on the minimap pans camera target to that 3D location.
+ * A.R.E.S. 2D Tactical Radar Minimap Component
+ * Utilitarian Aerospace Brutalist Radar:
+ * 200x200 Martian DEM elevation relief with #0284C7 nominal route and #DC2626 direct route,
+ * square geometric beacons, crosshair grid, and zero curves.
  */
 export default function RadarMinimap({
   dem,
@@ -18,17 +17,15 @@ export default function RadarMinimap({
   cameraPos,
   cameraTarget,
   onFocusLocation,
+  width = 180,
+  height = 180,
 }) {
   const canvasRef = useRef(null);
-
-  // Pre-render elevation & hazard base layer to an offscreen canvas for 60+ FPS efficiency
   const baseCanvasRef = useRef(null);
   const demSignatureRef = useRef('');
 
   const rows = dem?.rows || 200;
   const cols = dem?.cols || 200;
-  const width = 190;
-  const height = 190;
 
   // 1. Generate static background texture when DEM or costMap changes
   useEffect(() => {
@@ -67,25 +64,23 @@ export default function RadarMinimap({
         const isCaution = typeof cellCost === 'number' && cellCost > 2.0 && !isHazard;
 
         if (isHazard) {
-          // Bright Red/Magma Hazard
-          data[idx + 0] = 239;
-          data[idx + 1] = 68;
-          data[idx + 2] = 68;
-          data[idx + 3] = 240;
+          // Flat Crimson (#DC2626) Hazard
+          data[idx + 0] = 220;
+          data[idx + 1] = 38;
+          data[idx + 2] = 38;
+          data[idx + 3] = 255;
         } else if (isCaution) {
-          // Amber Caution Zone (Sand trap / high slip)
+          // Flat Amber (#D97706) Caution Zone
           data[idx + 0] = 217;
           data[idx + 1] = 119;
           data[idx + 2] = 6;
-          data[idx + 3] = 180;
+          data[idx + 3] = 200;
         } else {
-          // Martian Basalt to Rust elevation gradient
-          const red = Math.floor(25 + normE * 125);
-          const green = Math.floor(15 + normE * 60);
-          const blue = Math.floor(18 + normE * 45);
-          data[idx + 0] = red;
-          data[idx + 1] = green;
-          data[idx + 2] = blue;
+          // Monochrome Matte Topography (#181818 to #383838)
+          const shade = Math.floor(20 + normE * 40);
+          data[idx + 0] = shade;
+          data[idx + 1] = shade;
+          data[idx + 2] = shade;
           data[idx + 3] = 255;
         }
       }
@@ -106,7 +101,7 @@ export default function RadarMinimap({
     if (baseCanvasRef.current) {
       ctx.drawImage(baseCanvasRef.current, 0, 0, cols, rows, 0, 0, width, height);
     } else {
-      ctx.fillStyle = '#0a0e17';
+      ctx.fillStyle = '#121212';
       ctx.fillRect(0, 0, width, height);
     }
 
@@ -115,7 +110,7 @@ export default function RadarMinimap({
     const scaleY = height / rows;
 
     // Helper to draw route line
-    const drawRoute = (path, color, lineWidth = 1.5, dashed = false) => {
+    const drawRoute = (path, color, lineWidth = 2, dashed = false) => {
       if (!Array.isArray(path) || path.length < 2) return;
       ctx.beginPath();
       ctx.strokeStyle = color;
@@ -134,42 +129,38 @@ export default function RadarMinimap({
       ctx.setLineDash([]);
     };
 
-    // Draw Shortest Route (Red)
+    // Draw Shortest Route (Crimson #DC2626)
     const shortestPath = navigation?.shortest?.route?.path;
     if (shortestPath) {
-      drawRoute(shortestPath, 'rgba(239, 68, 68, 0.75)', 1.5, true);
+      drawRoute(shortestPath, '#DC2626', 1.5, true);
     }
 
-    // Draw Safest Route (Green)
+    // Draw Safest Route (Sky Blue #0284C7)
     const safestPath = navigation?.safest?.route?.path;
     if (safestPath) {
-      drawRoute(safestPath, 'rgba(16, 185, 129, 0.95)', 2.0);
+      drawRoute(safestPath, '#0284C7', 2.0);
     }
 
-    // Draw Start Beacon (Cyan dot)
+    // Draw Start Beacon (Sky Blue Square)
     if (startPoint) {
       const sx = startPoint[1] * scaleX;
       const sy = startPoint[0] * scaleY;
-      ctx.beginPath();
-      ctx.arc(sx, sy, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#06b6d4';
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
+      ctx.fillStyle = '#0284C7';
+      ctx.fillRect(sx - 3, sy - 3, 6, 6);
+      ctx.strokeStyle = '#D4D4D4';
       ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.strokeRect(sx - 3, sy - 3, 6, 6);
     }
 
-    // Draw Destination Beacon (Amber dot)
+    // Draw Destination Beacon (Flat Amber Square)
     if (destinationPoint) {
       const dx = destinationPoint[1] * scaleX;
       const dy = destinationPoint[0] * scaleY;
-      ctx.beginPath();
-      ctx.arc(dx, dy, 4, 0, Math.PI * 2);
-      ctx.fillStyle = '#f59e0b';
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
+      ctx.fillStyle = '#D97706';
+      ctx.fillRect(dx - 3, dy - 3, 6, 6);
+      ctx.strokeStyle = '#D4D4D4';
       ctx.lineWidth = 1;
-      ctx.stroke();
+      ctx.strokeRect(dx - 3, dy - 3, 6, 6);
     }
 
     // Draw Rover Position & Heading Arrow
@@ -177,70 +168,45 @@ export default function RadarMinimap({
       const rx = roverCoord[1] * scaleX;
       const ry = roverCoord[0] * scaleY;
 
-      // Outer radar pulse circle
-      ctx.beginPath();
-      ctx.arc(rx, ry, 5.5, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(6, 182, 212, 0.35)';
-      ctx.fill();
-      ctx.strokeStyle = '#22d3ee';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
+      // Rover square reticle
+      ctx.fillStyle = '#D4D4D4';
+      ctx.fillRect(rx - 3, ry - 3, 6, 6);
+      ctx.strokeStyle = '#0284C7';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(rx - 4, ry - 4, 8, 8);
 
       // Heading indicator needle
-      const headingLen = 9;
+      const headingLen = 10;
       const nx = rx + Math.sin(roverHeading) * headingLen;
       const ny = ry + Math.cos(roverHeading) * headingLen;
       ctx.beginPath();
       ctx.moveTo(rx, ry);
       ctx.lineTo(nx, ny);
-      ctx.strokeStyle = '#ffffff';
+      ctx.strokeStyle = '#FFFFFF';
       ctx.lineWidth = 2;
       ctx.stroke();
     }
 
-    // Draw Tactical Camera Frustum / Center Target
+    // Draw Tactical Camera Target Crosshair
     if (cameraTarget) {
-      // Convert world target (x, z) to grid (row, col)
       const targetCol = cameraTarget.x + (cols - 1) / 2;
       const targetRow = cameraTarget.z + (rows - 1) / 2;
       const tx = targetCol * scaleX;
       const ty = targetRow * scaleY;
 
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.55)';
+      ctx.strokeStyle = '#D4D4D4';
       ctx.lineWidth = 1;
       ctx.strokeRect(tx - 3, ty - 3, 6, 6);
-
-      if (cameraPos) {
-        const camCol = cameraPos.x + (cols - 1) / 2;
-        const camRow = cameraPos.z + (rows - 1) / 2;
-        const cx = camCol * scaleX;
-        const cy = camRow * scaleY;
-
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(tx - 5, ty);
-        ctx.lineTo(tx + 5, ty);
-        ctx.closePath();
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.stroke();
-      }
     }
 
-    // Draw Radar Sweep Reticle & Grid Crosshair
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    // Radar Hairline Crosshair
+    ctx.strokeStyle = '#333333';
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(width / 2, 0);
     ctx.lineTo(width / 2, height);
     ctx.moveTo(0, height / 2);
     ctx.lineTo(width, height / 2);
-    ctx.stroke();
-
-    // Radar distance concentric rings
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.06)';
-    ctx.beginPath();
-    ctx.arc(width / 2, height / 2, width * 0.25, 0, Math.PI * 2);
-    ctx.arc(width / 2, height / 2, width * 0.45, 0, Math.PI * 2);
     ctx.stroke();
   }, [
     dem,
@@ -252,17 +218,17 @@ export default function RadarMinimap({
     destinationPoint,
     cameraPos,
     cameraTarget,
-    rows,
     cols,
+    rows,
     width,
     height,
   ]);
 
-  // Click on minimap to focus 3D camera
   const handleCanvasClick = useCallback(
     (e) => {
       const canvas = canvasRef.current;
-      if (!canvas || !onFocusLocation) return;
+      if (!canvas) return;
+
       const rect = canvas.getBoundingClientRect();
       const clickX = e.clientX - rect.left;
       const clickY = e.clientY - rect.top;
@@ -277,17 +243,15 @@ export default function RadarMinimap({
 
   return (
     <div
-      className="tactical-panel"
       style={{
         position: 'relative',
         width: `${width}px`,
         height: `${height}px`,
-        overflow: 'hidden',
-        border: '1px solid rgba(255, 255, 255, 0.16)',
-        boxShadow: '0 4px 18px rgba(0, 0, 0, 0.75)',
+        background: '#121212',
+        border: '1px solid #333333',
         cursor: 'crosshair',
       }}
-      title="Tactical 2D Radar Minimap — Click to Focus Camera"
+      title="A.R.E.S. Radar 2D — Click to Pan Camera"
     >
       <canvas
         ref={canvasRef}
@@ -296,36 +260,34 @@ export default function RadarMinimap({
         onClick={handleCanvasClick}
         style={{ display: 'block' }}
       />
-      {/* Corner Overlay Labels */}
+      {/* Brutalist Monospace Labels */}
       <div
         style={{
           position: 'absolute',
-          top: '3px',
-          left: '5px',
+          top: '2px',
+          left: '4px',
           fontSize: '8px',
-          fontFamily: 'var(--font-mono)',
+          fontFamily: "'JetBrains Mono', monospace",
           fontWeight: 700,
-          color: 'var(--rover)',
+          color: '#858585',
           letterSpacing: '0.08em',
           pointerEvents: 'none',
-          textShadow: '0 1px 3px rgba(0,0,0,0.9)',
         }}
       >
-        RADAR 2D // {cols}×{rows}
+        RADAR // {cols}×{rows}
       </div>
       <div
         style={{
           position: 'absolute',
-          bottom: '3px',
-          right: '5px',
+          bottom: '2px',
+          right: '4px',
           fontSize: '7px',
-          fontFamily: 'var(--font-mono)',
-          color: 'var(--text-muted)',
+          fontFamily: "'JetBrains Mono', monospace",
+          color: '#858585',
           pointerEvents: 'none',
-          textShadow: '0 1px 3px rgba(0,0,0,0.9)',
         }}
       >
-        CLICK TO TARGET
+        [ TARGET LOCK ]
       </div>
     </div>
   );

@@ -7,36 +7,37 @@ export default function ErrorBanner({ error, onRetry }) {
   return (
     <div
       style={{
-        margin: '16px',
-        padding: '16px',
-        backgroundColor: 'rgba(239, 68, 68, 0.12)',
-        border: '1px solid var(--hazard)',
-        borderRadius: '6px',
+        margin: '12px',
+        padding: '12px',
+        backgroundColor: '#1a1010',
+        border: '1px solid #DC2626',
+        borderRadius: '0px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '8px',
+        gap: '6px',
+        fontFamily: "'JetBrains Mono', monospace",
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--hazard)', fontWeight: 600 }}>
-          <AlertCircle size={18} />
-          <span>{error.title || 'Mission Control System Alert'}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#DC2626', fontWeight: 700, fontSize: '11px' }}>
+          <AlertCircle size={14} />
+          <span>[SYSTEM ALERT] {error.title || 'COMMUNICATION LINK FAILURE'}</span>
         </div>
         {onRetry && (
-          <button className="mc-btn" onClick={onRetry} style={{ padding: '4px 8px', fontSize: '11px' }}>
-            <RefreshCw size={12} />
+          <button className="mc-btn" onClick={onRetry} style={{ padding: '2px 8px', fontSize: '10px' }}>
+            <RefreshCw size={10} />
             RETRY LINK
           </button>
         )}
       </div>
 
-      <div style={{ color: 'var(--text-primary)', fontSize: '13px' }}>
+      <div style={{ color: '#D4D4D4', fontSize: '11px' }}>
         {error.message}
       </div>
 
       {error.timestamp && (
-        <div className="mono" style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-          Last Link Attempt: {error.timestamp}
+        <div className="mono" style={{ fontSize: '9px', color: '#858585' }}>
+          TIMESTAMP: {error.timestamp}
         </div>
       )}
 
@@ -44,25 +45,19 @@ export default function ErrorBanner({ error, onRetry }) {
         <div
           className="mono"
           style={{
-            background: 'var(--bg-base)',
-            padding: '8px',
-            borderRadius: '4px',
-            fontSize: '11px',
-            color: 'var(--text-secondary)',
-            maxHeight: '100px',
+            background: '#121212',
+            padding: '6px',
+            border: '1px solid #333333',
+            borderRadius: '0px',
+            fontSize: '10px',
+            color: '#858585',
+            maxHeight: '90px',
             overflowY: 'auto',
           }}
         >
           {error.details.map((d, i) => (
-            <div key={i}>• {d}</div>
+            <div key={i}>&gt; {d}</div>
           ))}
-        </div>
-      )}
-
-      {error.samples && error.samples.length > 0 && (
-        <div className="mono" style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-          Bad data samples (row, col: value):{' '}
-          {error.samples.map((s) => `(${s.row}, ${s.col}: ${s.value})`).join(', ')}
         </div>
       )}
     </div>

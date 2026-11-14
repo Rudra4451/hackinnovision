@@ -1,5 +1,5 @@
 import React from 'react';
-import { Database, AlertTriangle } from 'lucide-react';
+import { Database } from 'lucide-react';
 
 export default function EmptyState({ title, message, icon: Icon = Database }) {
   return (
@@ -9,34 +9,35 @@ export default function EmptyState({ title, message, icon: Icon = Database }) {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: '48px 24px',
+        padding: '36px 20px',
         textAlign: 'center',
-        gap: '12px',
+        gap: '10px',
         height: '100%',
-        color: 'var(--text-secondary)',
+        color: '#858585',
+        fontFamily: "'JetBrains Mono', monospace",
       }}
     >
       <div
         style={{
-          width: '48px',
-          height: '48px',
-          borderRadius: '50%',
-          background: 'var(--bg-elevated)',
+          width: '40px',
+          height: '40px',
+          borderRadius: '0px',
+          background: '#161616',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          border: '1px solid var(--border-subtle)',
-          color: 'var(--text-muted)',
+          border: '1px solid #333333',
+          color: '#858585',
         }}
       >
-        <Icon size={24} />
+        <Icon size={20} />
       </div>
 
-      <div style={{ color: 'var(--text-primary)', fontSize: '15px', fontWeight: 600 }}>
+      <div style={{ color: '#D4D4D4', fontSize: '13px', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
         {title}
       </div>
 
-      <div style={{ maxWidth: '380px', fontSize: '13px', lineHeight: 1.5 }}>
+      <div style={{ maxWidth: '360px', fontSize: '11px', lineHeight: 1.4, color: '#858585' }}>
         {message}
       </div>
     </div>

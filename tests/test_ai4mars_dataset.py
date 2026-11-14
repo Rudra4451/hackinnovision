@@ -214,3 +214,4 @@ def test_alert_clear_and_event_lifecycle():
     detector.clear_alerts()
     assert detector.alert_count == 0
     assert len(detector.get_alerts()) == 0
+

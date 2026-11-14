@@ -1,6 +1,11 @@
 import React, { useMemo } from 'react';
 import { elevationAt } from '../../utils/coordinateMapping';
 
+/**
+ * A.R.E.S. Elevation Profile Transect Chart
+ * Brutalist Aerospace Telemetry: Zero gradients, zero neon glow, hairline grid lines #333333,
+ * solid monochrome/accent profile line, tabular monospace numbers.
+ */
 export default function ElevationProfileChart({
   path = [],
   elevation,
@@ -38,17 +43,28 @@ export default function ElevationProfileChart({
 
   if (!chartData || chartData.samples.length < 2) {
     return (
-      <div style={{ height: '48px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '11px', fontFamily: 'var(--font-mono)' }}>
-        AWAITING ROUTE WAYPOINTS FOR ELEVATION TRANSECT
+      <div
+        style={{
+          height: '46px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#858585',
+          fontSize: '10px',
+          fontFamily: "'JetBrains Mono', monospace",
+          border: '1px dashed #333333',
+        }}
+      >
+        AWAITING TRAJECTORY TELEMETRY FOR ELEVATION TRANSECT
       </div>
     );
   }
 
   const { samples, minZ, maxZ, rangeZ } = chartData;
   const width = 480;
-  const height = 50;
-  const padY = 8;
-  const padX = 12;
+  const height = 48;
+  const padY = 6;
+  const padX = 10;
   const plotW = width - padX * 2;
   const plotH = height - padY * 2;
 
@@ -63,8 +79,6 @@ export default function ElevationProfileChart({
     return idx === 0 ? `M ${p.x} ${p.y}` : `${acc} L ${p.x} ${p.y}`;
   }, '');
 
-  const areaD = `${pathD} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
-
   // Live Rover Position on the chart
   const curIdx = Math.max(0, Math.min(samples.length - 1, roverProgress));
   const k = Math.floor(curIdx);
@@ -76,25 +90,37 @@ export default function ElevationProfileChart({
   const roverY = p0.y + (p1.y - p0.y) * t;
   const currentZ = p0.z + (p1.z - p0.z) * t;
 
+  const lineColor = activeRoute === 'safest' ? '#0284C7' : '#DC2626';
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', position: 'relative' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
-        <span>TRANSECT: 0 m ({minZ.toFixed(1)} m)</span>
-        <span style={{ color: activeRoute === 'safest' ? 'var(--safe)' : 'var(--hazard)', fontWeight: 600 }}>
-          LIVE ALTITUDE: {currentZ.toFixed(1)} m
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', position: 'relative' }}>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          fontSize: '9px',
+          fontFamily: "'JetBrains Mono', monospace",
+          color: '#858585',
+        }}
+      >
+        <span>TRANSECT: 0.0m ({minZ.toFixed(1)}m)</span>
+        <span style={{ color: lineColor, fontWeight: 700 }}>
+          ALTITUDE: {currentZ.toFixed(1)} m
         </span>
-        <span>{totalDistance > 0 ? `${totalDistance.toFixed(1)} m` : '—'} ({maxZ.toFixed(1)} m)</span>
+        <span>{totalDistance > 0 ? `${totalDistance.toFixed(1)}m` : '—'} ({maxZ.toFixed(1)}m)</span>
       </div>
 
-      <svg width="100%" height={height} viewBox={`0 0 ${width} ${height}`} style={{ overflow: 'visible' }}>
-        <defs>
-          <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor={activeRoute === 'safest' ? '#10B981' : '#EF4444'} stopOpacity="0.35" />
-            <stop offset="100%" stopColor={activeRoute === 'safest' ? '#10B981' : '#EF4444'} stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
+      <svg
+        width="100%"
+        height={height}
+        viewBox={`0 0 ${width} ${height}`}
+        style={{ overflow: 'visible', background: '#161616', border: '1px solid #333333' }}
+      >
+        {/* Hairline Grid Horizon Lines (Zero gradients) */}
+        <line x1="0" y1={height / 2} x2={width} y2={height / 2} stroke="#222222" strokeWidth="1" strokeDasharray="4 2" />
+        <line x1="0" y1={height - padY} x2={width} y2={height - padY} stroke="#333333" strokeWidth="1" />
 
-        {/* Hazard & Caution background columns */}
+        {/* Hazard & Caution Columns (Solid Flat Colors, No Gradient) */}
         {points.map((p, idx) => {
           if (!p.isCaution && !p.isHazard) return null;
           const colW = Math.max(2, plotW / samples.length);
@@ -105,35 +131,18 @@ export default function ElevationProfileChart({
               y={padY}
               width={colW}
               height={plotH}
-              fill={p.isHazard ? 'rgba(239, 68, 68, 0.28)' : 'rgba(245, 158, 11, 0.22)'}
+              fill={p.isHazard ? '#DC2626' : '#D97706'}
+              opacity="0.3"
             />
           );
         })}
 
-        {/* Shaded Area under Profile */}
-        <path d={areaD} fill="url(#areaGradient)" />
+        {/* Solid Transect Profile Line (Zero glow, pure 1.5px stroke) */}
+        <path d={pathD} fill="none" stroke={lineColor} strokeWidth="1.5" />
 
-        {/* Elevation Transect Line */}
-        <path
-          d={pathD}
-          fill="none"
-          stroke={activeRoute === 'safest' ? 'var(--safe)' : 'var(--hazard)'}
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-
-        {/* Live Rover Playhead Pin */}
-        <line
-          x1={roverX}
-          y1={padY - 2}
-          x2={roverX}
-          y2={height}
-          stroke="var(--rover)"
-          strokeWidth="1.2"
-          strokeDasharray="2,2"
-        />
-        <circle cx={roverX} cy={roverY} r="3.5" fill="var(--rover)" stroke="#fff" strokeWidth="1" />
+        {/* Current Rover Marker on Transect: Solid Square Reticle */}
+        <line x1={roverX} y1={0} x2={roverX} y2={height} stroke="#D4D4D4" strokeWidth="1" strokeDasharray="2 2" />
+        <rect x={roverX - 3} y={roverY - 3} width="6" height="6" fill="#D4D4D4" stroke="#121212" strokeWidth="1" />
       </svg>
     </div>
   );

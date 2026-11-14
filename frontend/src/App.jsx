@@ -1,32 +1,23 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import {
-  Compass,
-  Map,
-  Navigation,
   Play,
   Pause,
   RotateCcw,
-  Shield,
-  Zap,
   Radio,
   Wind,
   Flame,
-  Activity,
-  Layers,
-  Database,
-  CheckCircle2,
-  XCircle,
   Camera,
-  AlertTriangle,
+  Database,
 } from 'lucide-react';
 
 import TerrainThreeMap from './components/three/TerrainThreeMap';
 import InteractiveRoverHUD from './components/navigation/InteractiveRoverHUD';
-import RadarMinimap from './components/navigation/RadarMinimap';
 import ElevationProfileChart from './components/navigation/ElevationProfileChart';
 import Terrain3DMap from './components/terrain/Terrain3DMap';
 import TerrainControls from './components/terrain/TerrainControls';
 import VisionScoreDashboard from './components/visionscore/VisionScoreDashboard';
+import AresTerminalLanding from './components/terminal/AresTerminalLanding';
+import AresLogo from './components/terminal/AresLogo';
 
 import StatusChip from './components/shared/StatusChip';
 import ErrorBanner from './components/shared/ErrorBanner';
@@ -38,13 +29,16 @@ import { bilinearElevation } from './utils/coordinateMapping';
 import { compareRoutes } from './api/client';
 
 export default function App() {
-  // 1. Interactive Marker Endpoints (Cyan Start & Amber Destination)
+  // 0. Classified Terminal Landing Entry State
+  const [showTerminal, setShowTerminal] = useState(true);
+
+  // 1. Interactive Marker Endpoints (Sky Blue Start & Amber Destination)
   const [startPoint, setStartPoint] = useState([15, 15]);
   const [destinationPoint, setDestinationPoint] = useState([185, 185]);
   const [selectionMode, setSelectionMode] = useState('auto'); // 'auto' | 'start' | 'destination'
 
   // 2. Trajectory Selection & Kinematics State
-  const [activeRoute, setActiveRoute] = useState('safest'); // 'safest' (Green) | 'shortest' (Red)
+  const [activeRoute, setActiveRoute] = useState('safest'); // 'safest' (Sky Blue) | 'shortest' (Crimson)
   const [isPlaying, setIsPlaying] = useState(false);
   const [roverProgress, setRoverProgress] = useState(0);
   const [simSpeed, setSimSpeed] = useState(1.0); // 0.5, 1.0, 2.0, 4.0
@@ -63,15 +57,15 @@ export default function App() {
   // 5. Viewport Mode (3D Tactical Sim vs Plotly Topographic vs VisionScore)
   const [activeView, setActiveView] = useState('tactical'); // 'tactical' | 'topographic' | 'visionscore'
 
-  // 6. Environmental Danger Telemetry (Wind, Thermal Magma, Seismic, Inclinometer)
+  // 6. Environmental Telemetry (Wind, Thermal, Seismic, Inclinometer)
   const [environmentalData, setEnvironmentalData] = useState({
     windSpeedMs: '28.4',
     windHeading: 'WNW (285°)',
     thermalFluxKw: '4.8',
     seismicAlert: 'NOMINAL',
     opticalDepth: '0.82',
-    roverPitch: '1.8',
-    roverRoll: '-0.9',
+    roverPitch: '0.0',
+    roverRoll: '0.0',
   });
 
   // 7. Mission Data Bridge (FastAPI REST Endpoint)
@@ -141,7 +135,7 @@ export default function App() {
   // High-level Navigation Status
   const navStatus = useMemo(() => {
     if (!startPoint) return 'SELECT_START';
-    if (!destinationPoint) return 'SELECT_DESTINATION';
+    if (!destinationPoint) return 'SELECT_GOAL';
     if (loading) return 'CALCULATING';
     if (!effectiveNavigation?.[activeRoute]?.route?.success) return 'BLOCKED';
     if (isPlaying) return 'NAVIGATING';
@@ -224,9 +218,7 @@ export default function App() {
     }
   }, []);
 
-  // ─────────────────────────────────────────────────────────────
   // Dynamic Hazard Injection & Real-Time Mid-Course Rerouting
-  // ─────────────────────────────────────────────────────────────
   const handleInjectHazard = useCallback(
     async (type, r, c) => {
       if (!effectiveCostMap?.cost) return;
@@ -256,7 +248,6 @@ export default function App() {
       };
       setCustomCostMap(updatedCostMap);
 
-      // Rover's current continuous grid coordinate
       const curR = Math.max(0, Math.min(rows - 1, Math.round(roverCoord[0])));
       const curC = Math.max(0, Math.min(cols - 1, Math.round(roverCoord[1])));
       const goal = destinationPoint || [rows - 15, cols - 15];
@@ -264,7 +255,6 @@ export default function App() {
       try {
         const rerouteRes = await compareRoutes([curR, curC], goal, clonedCost);
         if (rerouteRes) {
-          // Splice path: retain traveled steps up to curR, curC and append new path forward
           const currentPath = effectiveNavigation?.[activeRoute]?.route?.path || [];
           const curIdx = Math.floor(roverProgress);
           const traveledPrefix = currentPath.slice(0, Math.max(0, curIdx));
@@ -282,6 +272,8 @@ export default function App() {
               route: {
                 ...rerouteRes.safest.route,
                 path: splicedSafest,
+                smoothed_x: rerouteRes.safest.route?.smoothed_x,
+                smoothed_y: rerouteRes.safest.route?.smoothed_y,
               },
             },
             shortest: {
@@ -289,13 +281,15 @@ export default function App() {
               route: {
                 ...rerouteRes.shortest.route,
                 path: splicedShortest,
+                smoothed_x: rerouteRes.shortest.route?.smoothed_x,
+                smoothed_y: rerouteRes.shortest.route?.smoothed_y,
               },
             },
           };
 
           setCustomNavigation(splicedNavigation);
           setRerouteAlert({
-            message: `DYNAMIC REROUTE: Avoided ${type.toUpperCase()} at (${r}, ${c}). Safe trajectory engaged!`,
+            message: `DYNAMIC REROUTE: Avoided ${type.toUpperCase()} at (${r}, ${c}). New trajectory armed!`,
             timestamp: Date.now(),
           });
           setTimeout(() => setRerouteAlert(null), 6500);
@@ -310,23 +304,36 @@ export default function App() {
   return (
     <div className="mc-container">
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 1. TOP COMMAND TELEMETRY BAR (38px height)                    */}
+      {/* 0. CLASSIFIED ENTRY TERMINAL LANDING PAGE                     */}
+      {/* ───────────────────────────────────────────────────────────── */}
+      {showTerminal && (
+        <AresTerminalLanding onInitiate={() => setShowTerminal(false)} />
+      )}
+
+      {/* ───────────────────────────────────────────────────────────── */}
+      {/* 1. TOP COMMAND TELEMETRY BAR (36px height)                    */}
       {/* ───────────────────────────────────────────────────────────── */}
       <header className="mc-top-bar">
         {/* Left: Branding & System State */}
         <div className="mc-brand-area">
-          <Radio size={15} color="var(--rover)" />
-          <div className="mc-title">MARS-09 // ODYSSEY RECON</div>
+          <AresLogo size={22} showText={false} />
+          <div className="mc-title">A.R.E.S. MARS-09 // KERNEL</div>
+          <button
+            onClick={() => setShowTerminal(true)}
+            className="mc-btn"
+            style={{ padding: '1px 6px', fontSize: '9px', color: '#858585', border: '1px solid #333333' }}
+            title="Open Classified Entry Terminal Dossier"
+          >
+            [ DOSSIER ]
+          </button>
           <span
             style={{
               fontSize: '9px',
               fontFamily: 'var(--font-mono)',
               padding: '1px 6px',
-              background:
-                environmentalData.seismicAlert !== 'NOMINAL'
-                  ? 'rgba(239, 68, 68, 0.25)'
-                  : 'rgba(16, 185, 129, 0.2)',
-              color: environmentalData.seismicAlert !== 'NOMINAL' ? 'var(--hazard)' : 'var(--safe)',
+              border: `1px solid ${environmentalData.seismicAlert !== 'NOMINAL' ? '#DC2626' : '#0284C7'}`,
+              background: '#161616',
+              color: environmentalData.seismicAlert !== 'NOMINAL' ? '#DC2626' : '#0284C7',
               fontWeight: 700,
               letterSpacing: '0.05em',
             }}
@@ -338,13 +345,13 @@ export default function App() {
         {/* Center: Live Environmental Readout */}
         <div className="mc-env-readout">
           <div className="mc-env-item">
-            <Wind size={12} color="#67e8f9" />
+            <Wind size={11} color="#0284C7" />
             <span>
               WIND: {environmentalData.windSpeedMs} m/s {environmentalData.windHeading}
             </span>
           </div>
           <div className="mc-env-item">
-            <Flame size={12} color="#f97316" />
+            <Flame size={11} color="#D97706" />
             <span>THERMAL: {environmentalData.thermalFluxKw} kW/m²</span>
           </div>
           <div className="mc-env-item" style={{ color: 'var(--text-muted)' }}>
@@ -358,13 +365,13 @@ export default function App() {
         </div>
 
         {/* Right: Viewport Mode Switcher & Telemetry Health */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div className="mc-view-switcher">
             <button
               className={`mc-view-btn ${activeView === 'tactical' ? 'active' : ''}`}
               onClick={() => setActiveView('tactical')}
             >
-              3D TACTICAL SIM
+              3D WIREFRAME SIM
             </button>
             <button
               className={`mc-view-btn ${activeView === 'topographic' ? 'active' : ''}`}
@@ -376,8 +383,8 @@ export default function App() {
               className={`mc-view-btn ${activeView === 'visionscore' ? 'active' : ''}`}
               onClick={() => setActiveView('visionscore')}
             >
-              <Camera size={11} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-              VISIONSCORE 2.0
+              <Camera size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+              VISIONSCORE
             </button>
           </div>
 
@@ -386,14 +393,14 @@ export default function App() {
       </header>
 
       {/* ───────────────────────────────────────────────────────────── */}
-      {/* 2. FULL-BLEED 100VW × 100VH 3D VIEWPORT / VISIONSCORE         */}
+      {/* 2. FULL-BLEED 100VW × 100VH VIEWPORT                          */}
       {/* ───────────────────────────────────────────────────────────── */}
       {activeView === 'visionscore' ? (
         <main
           className="mc-viewport-area"
-          style={{ top: '38px', height: 'calc(100vh - 38px)', overflow: 'hidden' }}
+          style={{ top: '36px', height: 'calc(100vh - 36px)', overflow: 'hidden' }}
         >
-          <ErrorBoundary fallbackTitle="VisionScore 2.0 Subsystem Failure">
+          <ErrorBoundary fallbackTitle="VisionScore Subsystem Failure">
             <VisionScoreDashboard />
           </ErrorBoundary>
         </main>
@@ -413,15 +420,15 @@ export default function App() {
               >
                 <div
                   className="mono"
-                  style={{ color: 'var(--rover)', fontSize: '12px', letterSpacing: '0.12em' }}
+                  style={{ color: '#D4D4D4', fontSize: '11px', letterSpacing: '0.14em' }}
                 >
-                  INGESTING 200×200 MARTIAN TOPOGRAPHY & MULTI-HAZARD MESH...
+                  INGESTING 200×200 MARTIAN TOPOGRAPHY & WIREFRAME MATRIX...
                 </div>
                 <div
                   style={{
                     width: '180px',
                     height: '2px',
-                    background: 'rgba(255,255,255,0.1)',
+                    background: '#333333',
                     overflow: 'hidden',
                   }}
                 >
@@ -429,8 +436,7 @@ export default function App() {
                     style={{
                       width: '50%',
                       height: '100%',
-                      background: 'var(--rover)',
-                      animation: 'status-blink 1s infinite alternate',
+                      background: '#0284C7',
                     }}
                   />
                 </div>
@@ -439,7 +445,7 @@ export default function App() {
               <div
                 style={{
                   position: 'absolute',
-                  top: '60px',
+                  top: '50px',
                   left: '20px',
                   zIndex: 100,
                   maxWidth: '450px',
@@ -454,8 +460,8 @@ export default function App() {
                 icon={Database}
               />
             ) : activeView === 'tactical' ? (
-              /* BUTTER-SMOOTH THREE.JS TACTICAL SIM WITH MULTI-HAZARD 3D SYSTEM */
-              <ErrorBoundary fallbackTitle="Three.js Tactical Viewport Error">
+              /* A.R.E.S. BRUTALIST THREE.JS TACTICAL SIM WITH WIREFRAME TERRAIN & GEOMETRIC PRIMITIVES */
+              <ErrorBoundary fallbackTitle="A.R.E.S. Tactical Viewport Error">
                 <TerrainThreeMap
                   dem={dem}
                   costMap={effectiveCostMap}
@@ -480,7 +486,7 @@ export default function App() {
                 />
               </ErrorBoundary>
             ) : (
-              /* PLOTLY TOPOGRAPHIC CONTOUR & ELEVATION RELIEF VIEW */
+              /* PLOTLY TOPOGRAPHIC CONTOUR VIEW */
               <>
                 <TerrainControls
                   overlays={overlays}
@@ -505,7 +511,9 @@ export default function App() {
           </main>
 
           {/* ───────────────────────────────────────────────────────────── */}
-          {/* 3. FLOATING LEFT TACTICAL STACK (325px wide)                  */}
+          {/* 3. FLOATING LEFT TACTICAL STACK                               */}
+          {/* Houses Radar, Artificial Horizon, and Metrics in strict 1px   */}
+          {/* grid lines                                                    */}
           {/* ───────────────────────────────────────────────────────────── */}
           <aside className="mc-left-stack">
             <InteractiveRoverHUD
@@ -524,6 +532,12 @@ export default function App() {
               toolMode={toolMode}
               onSetToolMode={setToolMode}
               rerouteAlert={rerouteAlert}
+              dem={dem}
+              costMap={effectiveCostMap}
+              roverCoord={roverCoord}
+              roverHeading={roverHeading}
+              cameraState={cameraState}
+              onFocusLocation={(r, c) => setFocusTarget({ row: r, col: c })}
             />
           </aside>
 
@@ -536,7 +550,7 @@ export default function App() {
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                borderBottom: '1px solid rgba(255,255,255,0.08)',
+                borderBottom: '1px solid #333333',
                 paddingBottom: '4px',
               }}
             >
@@ -544,11 +558,11 @@ export default function App() {
                 style={{
                   fontSize: '9px',
                   fontWeight: 700,
-                  color: 'var(--text-muted)',
+                  color: '#858585',
                   letterSpacing: '0.08em',
                 }}
               >
-                MAP LEGEND & INTEGRITY
+                A.R.E.S. MAP LEGEND
               </span>
               <div
                 style={{
@@ -558,13 +572,13 @@ export default function App() {
                   fontFamily: 'var(--font-mono)',
                 }}
               >
-                <span style={{ color: integrity.demLoaded ? 'var(--safe)' : 'var(--hazard)' }}>
+                <span style={{ color: integrity.demLoaded ? '#0284C7' : '#DC2626' }}>
                   DEM ✓
                 </span>
-                <span style={{ color: integrity.costMapLoaded ? 'var(--safe)' : 'var(--hazard)' }}>
+                <span style={{ color: integrity.costMapLoaded ? '#0284C7' : '#DC2626' }}>
                   COST ✓
                 </span>
-                <span style={{ color: integrity.routeLoaded ? 'var(--safe)' : 'var(--hazard)' }}>
+                <span style={{ color: integrity.routeLoaded ? '#0284C7' : '#DC2626' }}>
                   NAV ✓
                 </span>
               </div>
@@ -575,28 +589,30 @@ export default function App() {
                 display: 'grid',
                 gridTemplateColumns: '1fr 1fr',
                 gap: '4px',
-                fontSize: '10px',
+                fontSize: '9px',
                 fontFamily: 'var(--font-mono)',
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <span
                   style={{
-                    width: '8px',
-                    height: '8px',
-                    background: 'var(--rover)',
+                    width: '7px',
+                    height: '7px',
+                    background: '#0284C7',
                     display: 'inline-block',
+                    border: '1px solid #D4D4D4',
                   }}
                 />
-                <span>START [CYAN]</span>
+                <span>START [SKY BLUE]</span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <span
                   style={{
-                    width: '8px',
-                    height: '8px',
-                    background: 'var(--caution)',
+                    width: '7px',
+                    height: '7px',
+                    background: '#D97706',
                     display: 'inline-block',
+                    border: '1px solid #D4D4D4',
                   }}
                 />
                 <span>GOAL [AMBER]</span>
@@ -604,9 +620,9 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <span
                   style={{
-                    width: '8px',
-                    height: '8px',
-                    background: 'var(--safe)',
+                    width: '7px',
+                    height: '7px',
+                    background: '#0284C7',
                     display: 'inline-block',
                   }}
                 />
@@ -615,9 +631,9 @@ export default function App() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
                 <span
                   style={{
-                    width: '8px',
-                    height: '8px',
-                    background: 'var(--hazard)',
+                    width: '7px',
+                    height: '7px',
+                    background: '#DC2626',
                     display: 'inline-block',
                   }}
                 />
@@ -633,13 +649,13 @@ export default function App() {
               >
                 <span
                   style={{
-                    width: '8px',
-                    height: '8px',
-                    background: '#ff3700',
+                    width: '7px',
+                    height: '7px',
+                    background: '#DC2626',
                     display: 'inline-block',
                   }}
                 />
-                <span>VOLCANIC MAGMA VEIN (INF)</span>
+                <span>IMPASSABLE HAZARD (INF)</span>
               </div>
             </div>
 
@@ -647,16 +663,16 @@ export default function App() {
             <div
               style={{
                 marginTop: '4px',
-                borderTop: '1px solid rgba(255,255,255,0.06)',
+                borderTop: '1px solid #333333',
                 paddingTop: '4px',
-                fontSize: '10px',
+                fontSize: '9px',
                 fontFamily: 'var(--font-mono)',
               }}
             >
               {hoveredCell ? (
-                <span style={{ color: 'var(--text-secondary)' }}>
+                <span style={{ color: '#858585' }}>
                   CURSOR: ({hoveredCell.row}, {hoveredCell.col}) ·{' '}
-                  <span style={{ color: 'var(--text-primary)' }}>
+                  <span style={{ color: '#D4D4D4' }}>
                     {hoveredCell.elevation?.toFixed(1)} m
                   </span>{' '}
                   ·{' '}
@@ -664,55 +680,30 @@ export default function App() {
                     style={{
                       color:
                         hoveredCell.cost >= 9999
-                          ? 'var(--hazard)'
+                          ? '#DC2626'
                           : hoveredCell.cost > 2.0
-                          ? 'var(--caution)'
-                          : 'var(--safe)',
+                          ? '#D97706'
+                          : '#0284C7',
+                      fontWeight: 600,
                     }}
                   >
                     {hoveredCell.cost >= 9999
-                      ? 'VOLCANIC HAZARD'
+                      ? 'HAZARD (BLOCKED)'
                       : hoveredCell.cost > 2.0
                       ? `CAUTION (${hoveredCell.cost.toFixed(1)})`
                       : 'SAFE'}
                   </span>
                 </span>
               ) : (
-                <span style={{ color: 'var(--text-muted)' }}>
-                  Hover over terrain mesh to inspect geology
+                <span style={{ color: '#555555' }}>
+                  Hover over wireframe mesh to inspect terrain
                 </span>
               )}
             </div>
           </div>
 
           {/* ───────────────────────────────────────────────────────────── */}
-          {/* 5. 2D TACTICAL RADAR MINIMAP (Anchored in bottom-right)       */}
-          {/* ───────────────────────────────────────────────────────────── */}
-          <div
-            style={{
-              position: 'absolute',
-              right: '14px',
-              bottom: '124px',
-              zIndex: 30,
-              pointerEvents: 'auto',
-            }}
-          >
-            <RadarMinimap
-              dem={dem}
-              costMap={effectiveCostMap}
-              navigation={effectiveNavigation}
-              roverCoord={roverCoord}
-              roverHeading={roverHeading}
-              startPoint={startPoint}
-              destinationPoint={destinationPoint}
-              cameraPos={cameraState.pos}
-              cameraTarget={cameraState.target}
-              onFocusLocation={(r, c) => setFocusTarget({ row: r, col: c })}
-            />
-          </div>
-
-          {/* ───────────────────────────────────────────────────────────── */}
-          {/* 6. FLOATING BOTTOM MISSION TIMELINE & ELEVATION TRANSECT DOCK  */}
+          {/* 5. FLOATING BOTTOM MISSION TIMELINE & ELEVATION TRANSECT DOCK */}
           {/* ───────────────────────────────────────────────────────────── */}
           <footer className="mc-bottom-dock tactical-panel">
             {/* Left: Transport Cluster & Speed Controls */}
@@ -724,16 +715,16 @@ export default function App() {
                     disabled={!effectiveNavigation?.[activeRoute]?.route?.success || pathLength === 0}
                     onClick={roverProgress > 0 && roverProgress < maxIdx ? handleResume : handlePlay}
                   >
-                    <Play size={12} fill="#06080d" />
+                    <Play size={11} fill="#121212" />
                     <span>{roverProgress > 0 && roverProgress < maxIdx ? 'RESUME' : 'PLAY'}</span>
                   </button>
                 ) : (
                   <button
                     className="mc-tactical-btn"
                     onClick={handlePause}
-                    style={{ color: 'var(--caution)', borderColor: 'var(--caution)' }}
+                    style={{ color: '#D97706', borderColor: '#D97706' }}
                   >
-                    <Pause size={12} />
+                    <Pause size={11} />
                     <span>PAUSE</span>
                   </button>
                 )}
@@ -743,7 +734,7 @@ export default function App() {
                   disabled={roverProgress === 0 && !isPlaying}
                   onClick={handleResetRover}
                 >
-                  <RotateCcw size={11} />
+                  <RotateCcw size={10} />
                   <span>RESET</span>
                 </button>
 
@@ -765,18 +756,18 @@ export default function App() {
                 style={{
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px',
-                  fontSize: '10px',
+                  gap: '6px',
+                  fontSize: '9px',
                   fontFamily: 'var(--font-mono)',
-                  color: 'var(--text-secondary)',
+                  color: '#858585',
                 }}
               >
                 <span>PROGRESS:</span>
                 <div
                   style={{
                     flex: 1,
-                    height: '4px',
-                    background: 'rgba(255,255,255,0.1)',
+                    height: '3px',
+                    background: '#222222',
                     position: 'relative',
                   }}
                 >
@@ -784,12 +775,11 @@ export default function App() {
                     style={{
                       height: '100%',
                       width: `${progressPct}%`,
-                      background: activeRoute === 'safest' ? 'var(--safe)' : 'var(--hazard)',
-                      transition: 'width 100ms linear',
+                      background: activeRoute === 'safest' ? '#0284C7' : '#DC2626',
                     }}
                   />
                 </div>
-                <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
+                <span style={{ fontWeight: 700, color: '#D4D4D4' }}>
                   {progressPct}%
                 </span>
               </div>
@@ -807,35 +797,26 @@ export default function App() {
               />
             </div>
 
-            {/* Right: Live Rover Waypoint & Altimeter Telemetry */}
-            <div
-              className="mc-bottom-dock-right"
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '3px',
-                fontSize: '11px',
-                fontFamily: 'var(--font-mono)',
-              }}
-            >
+            {/* Right: Live Rover Telemetry Coordinates */}
+            <div className="mc-bottom-dock-right">
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>COORDINATES:</span>
-                <span style={{ color: 'var(--rover)', fontWeight: 600 }}>
+                <span style={{ color: '#858585' }}>COORDINATES:</span>
+                <span style={{ color: '#0284C7', fontWeight: 600 }}>
                   ({roverCoord[0].toFixed(1)}, {roverCoord[1].toFixed(1)})
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>SURFACE ALT:</span>
-                <span style={{ fontWeight: 600 }}>{currentElevation.toFixed(1)} m</span>
+                <span style={{ color: '#858585' }}>SURFACE ALT:</span>
+                <span style={{ fontWeight: 600, color: '#D4D4D4' }}>{currentElevation.toFixed(1)} m</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>TRAVERSE:</span>
+                <span style={{ color: '#858585' }}>TRAVERSE:</span>
                 <span>
                   {distanceTravelled} / {totalDistance.toFixed(1)} m
                 </span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ color: 'var(--text-muted)' }}>WAYPOINT:</span>
+                <span style={{ color: '#858585' }}>WAYPOINT:</span>
                 <span>
                   {Math.min(pathLength, Math.floor(roverProgress) + 1)} / {pathLength || 0}
                 </span>
