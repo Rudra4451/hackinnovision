@@ -13,7 +13,13 @@ Validates:
 import math
 import sys
 import unittest
-import numpy as np
+try:
+    import numpy as np
+except ImportError:
+    np = None
+
+if np is None:
+    raise unittest.SkipTest("NumPy is required for navigation scenario tests")
 
 # Ensure root directory is on Python path
 sys.path.insert(0, ".")
