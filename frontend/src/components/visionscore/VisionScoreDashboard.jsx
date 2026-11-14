@@ -19,14 +19,17 @@ import axios from 'axios';
 
 const BACKEND_BASE = 'http://127.0.0.1:8000';
 
+// Mars-Only Operational Taxonomy (Active Heuristic vs Planned Deep Learning)
 const SEMANTIC_CLASSES = [
-  { name: 'ROCK', color: '#808080', desc: 'Outcrops & boulders' },
-  { name: 'SAND', color: '#EDC989', desc: 'Dunes & aeolian ripples' },
-  { name: 'SOIL', color: '#B85032', desc: 'Martian oxidized regolith' },
-  { name: 'VEGETATION', color: '#2ECC71', desc: 'Terrestrial biomass' },
-  { name: 'WATER', color: '#3498DB', desc: 'Liquid bodies' },
-  { name: 'OBSTACLE', color: '#E74C3C', desc: 'Impassable hazards' },
-  { name: 'UNKNOWN', color: '#6C3483', desc: 'Shadows / glare / unclassified' },
+  { name: 'ROCK', color: '#808080', desc: 'Outcrops & scree', active: true },
+  { name: 'BOULDER', color: '#4B5563', desc: 'Large rock hazards', active: true },
+  { name: 'SAND', color: '#EDC989', desc: 'Dunes & aeolian ripples', active: true },
+  { name: 'REGOLITH', color: '#C2410C', desc: 'Weathered rocky mantle (Extended)', active: false },
+  { name: 'SOIL', color: '#B85032', desc: 'Martian oxidized regolith', active: true },
+  { name: 'BEDROCK', color: '#6B7280', desc: 'Firm exposed pavement (Extended)', active: false },
+  { name: 'DUST', color: '#F59E0B', desc: 'Fine aeolian mantling (Extended)', active: false },
+  { name: 'CRATER', color: '#431407', desc: 'Impact rim / depression (Extended)', active: false },
+  { name: 'UNKNOWN', color: '#6C3483', desc: 'Shadows / glare / unclassified', active: true },
 ];
 
 export default function VisionScoreDashboard() {
@@ -183,10 +186,10 @@ export default function VisionScoreDashboard() {
             </span>
           </div>
 
-          {/* Environment Selector */}
+          {/* Environment Selector (Mars-Only Operations) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', background: 'var(--bg-primary)', padding: '2px 4px', borderRadius: '4px', border: '1px solid var(--border-subtle)' }}>
             <span style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '0 4px' }}>PROFILE:</span>
-            {['MARS', 'EARTH', 'SIMULATION'].map((env) => (
+            {['MARS', 'SIMULATION_MARS'].map((env) => (
               <button
                 key={env}
                 onClick={() => setEnvironment(env)}
@@ -397,7 +400,10 @@ export default function VisionScoreDashboard() {
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                         <span style={{ width: '10px', height: '10px', borderRadius: '2px', background: cls.color }} />
-                        <span style={{ fontSize: '11px', fontWeight: 600 }}>{cls.name}</span>
+                        <span style={{ fontSize: '11px', fontWeight: 600 }}>
+                          {cls.name}
+                          {!cls.active && <span style={{ fontSize: '9px', color: 'var(--text-secondary)', marginLeft: '4px' }}>(Ext)</span>}
+                        </span>
                       </div>
                       <span style={{ fontSize: '11px', fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>
                         {pct.toFixed(1)}%

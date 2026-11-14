@@ -398,7 +398,7 @@ class SimulatedCameraFeed(BaseCameraStream):
             + 0.05 * rng.standard_normal((h, w))
         )
 
-        if self.environment == EnvironmentProfile.MARS:
+        if self.environment in (EnvironmentProfile.MARS, EnvironmentProfile.SIMULATION_MARS):
             # Base Martian ochre chromaticity (high Red, low Blue)
             base_r = np.clip(185.0 + 40.0 * undulation, 0, 255)
             base_g = np.clip(95.0 + 30.0 * undulation, 0, 255)
@@ -417,7 +417,7 @@ class SimulatedCameraFeed(BaseCameraStream):
             base_g = np.clip(125.0 + 35.0 * undulation, 0, 255)
             base_b = np.clip(110.0 + 30.0 * undulation, 0, 255)
         else:
-            # Simulation neutral gray-ochre
+            # Legacy Simulation neutral gray-ochre
             base_r = np.clip(150.0 + 30.0 * undulation, 0, 255)
             base_g = np.clip(140.0 + 30.0 * undulation, 0, 255)
             base_b = np.clip(120.0 + 25.0 * undulation, 0, 255)
@@ -434,9 +434,14 @@ class SimulatedCameraFeed(BaseCameraStream):
         frame = np.stack([base_r, base_g, base_b], axis=-1).astype(np.uint8)
 
         meta = {
-            "camera_model": "MARS09_MastCam_Simulated",
+            "camera_model": (
+                "MARS09_MastCam_Simulated"
+                if self.environment in (EnvironmentProfile.MARS, EnvironmentProfile.SIMULATION_MARS)
+                else "Generic_MastCam_Simulated"
+            ),
             "frame_index": self._frame_count,
             "simulated": True,
+            "environment": self.environment.value,
             "fov_deg": 65.0,
             "exposure_ms": 16.6,
             "obstacle_injected": self.inject_obstacle,

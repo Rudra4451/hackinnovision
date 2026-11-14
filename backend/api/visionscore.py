@@ -18,7 +18,12 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from backend.integrations.terrain_adapter import get_default_terrain
-from visionscore.config import EnvironmentProfile, SemanticClass
+from visionscore.config import (
+    ACTIVE_ENVIRONMENT_PROFILES,
+    EnvironmentProfile,
+    SemanticClass,
+    resolve_environment,
+)
 from visionscore.image_input import (
     CameraUnavailableError,
     ImageInputHandler,
@@ -69,6 +74,8 @@ def get_visionscore_status() -> Dict[str, Any]:
         "status": "OPERATIONAL",
         "version": "2.0.0",
         "active_environment": _STREAM_SIMULATOR.environment.value,
+        "operational_environment": "MARS",
+        "supported_environments": [e.value for e in ACTIVE_ENVIRONMENT_PROFILES],
         "obstacle_injection_active": _STREAM_SIMULATOR.inject_obstacle,
         "total_alerts_recorded": detector.alert_count,
         "capabilities": [
@@ -82,6 +89,9 @@ def get_visionscore_status() -> Dict[str, Any]:
     }
 
 
+_resolve_environment = resolve_environment
+
+
 @router.post("/segment")
 async def segment_uploaded_image(
     file: Optional[UploadFile] = File(default=None),
@@ -92,10 +102,7 @@ async def segment_uploaded_image(
     Executes semantic terrain segmentation on an uploaded image or current camera frame.
     Returns pixel percentages, dominant class, traversability summary, and base64 overlays.
     """
-    try:
-        env_profile = EnvironmentProfile(environment.upper())
-    except ValueError:
-        env_profile = EnvironmentProfile.MARS
+    env_profile = _resolve_environment(environment)
 
     if file is not None and file.filename:
         content = await file.read()
@@ -188,10 +195,7 @@ def get_camera_frame(
     Fetches the latest camera frame, performs obstacle detection,
     and returns image data URI and telemetry.
     """
-    try:
-        env_profile = EnvironmentProfile(environment.upper())
-    except ValueError:
-        env_profile = EnvironmentProfile.MARS
+    env_profile = _resolve_environment(environment)
 
     unified_img = _INPUT_HANDLER.capture_frame(environment_override=env_profile)
 

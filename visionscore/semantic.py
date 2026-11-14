@@ -33,8 +33,11 @@ from PIL import Image, ImageDraw, ImageFont
 from scipy import ndimage
 
 from visionscore.config import (
+    EXTENDED_PLANNED_CLASSES,
     EnvironmentParameters,
     EnvironmentProfile,
+    HEURISTIC_RECOGNIZED_CLASSES,
+    MARS_TARGET_TAXONOMY,
     SEMANTIC_COLOR_PALETTE,
     SEMANTIC_TRAVERSABILITY_MAP,
     SemanticClass,
@@ -217,8 +220,7 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
         texture_energy = 0.5 * grad_mag + 0.5 * local_std
 
         # 4. Pixel-Level Classification Assignment
-        # Mapping enum indices:
-        # 0: ROCK, 1: SAND, 2: SOIL, 3: VEGETATION, 4: WATER, 5: OBSTACLE, 6: UNKNOWN
+        # Full taxonomy mapping indices:
         class_to_id: Dict[SemanticClass, int] = {
             SemanticClass.ROCK: 0,
             SemanticClass.SAND: 1,
@@ -227,6 +229,11 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
             SemanticClass.WATER: 4,
             SemanticClass.OBSTACLE: 5,
             SemanticClass.UNKNOWN: 6,
+            SemanticClass.BOULDER: 7,
+            SemanticClass.REGOLITH: 8,
+            SemanticClass.BEDROCK: 9,
+            SemanticClass.DUST: 10,
+            SemanticClass.CRATER: 11,
         }
         id_to_class: Dict[int, str] = {idx: cls.value for cls, idx in class_to_id.items()}
 
@@ -241,9 +248,12 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
         rock_mask = (texture_energy >= env_params.texture_caution_threshold) & (texture_energy < env_params.texture_hazard_threshold)
         mask[rock_mask] = class_to_id[SemanticClass.ROCK]
 
-        # Apply Obstacle (severe texture energy / sharp boundary)
+        # Apply Obstacle / Boulder (severe texture energy / sharp boundary)
         obstacle_mask = (texture_energy >= env_params.texture_hazard_threshold)
-        mask[obstacle_mask] = class_to_id[SemanticClass.OBSTACLE]
+        if image.environment in (EnvironmentProfile.EARTH, EnvironmentProfile.SIMULATION):
+            mask[obstacle_mask] = class_to_id[SemanticClass.OBSTACLE]
+        else:
+            mask[obstacle_mask] = class_to_id[SemanticClass.BOULDER]
 
         # Environmental Adaptation Logic:
         # On Earth/Simulation: Support Vegetation and Water
@@ -298,9 +308,13 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
             trav_class = SEMANTIC_TRAVERSABILITY_MAP[SemanticClass(cls_enum)]
             traversability_summary[trav_class.value] += pct
 
-        # 10. Extract Morphological Region Segments for Obstacles and Rocks
+        # 10. Extract Morphological Region Segments for Obstacles, Boulders, and Rocks
         region_segments: List[Dict[str, Any]] = []
-        hazard_pixels = (mask == class_to_id[SemanticClass.OBSTACLE]) | (mask == class_to_id[SemanticClass.ROCK])
+        hazard_pixels = (
+            (mask == class_to_id[SemanticClass.BOULDER])
+            | (mask == class_to_id[SemanticClass.OBSTACLE])
+            | (mask == class_to_id[SemanticClass.ROCK])
+        )
         labeled_regions, num_features = ndimage.label(hazard_pixels)
         if num_features > 0:
             objects = ndimage.find_objects(labeled_regions)
@@ -317,8 +331,14 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
                 centroid_c = float(min_c + (max_c - min_c) / 2.0)
 
                 sub_mask = mask[loc]
+                is_boulder = np.any(sub_mask == class_to_id[SemanticClass.BOULDER])
                 is_obstacle = np.any(sub_mask == class_to_id[SemanticClass.OBSTACLE])
-                reg_class = SemanticClass.OBSTACLE.value if is_obstacle else SemanticClass.ROCK.value
+                if is_boulder:
+                    reg_class = SemanticClass.BOULDER.value
+                elif is_obstacle:
+                    reg_class = SemanticClass.OBSTACLE.value
+                else:
+                    reg_class = SemanticClass.ROCK.value
 
                 region_segments.append({
                     "region_id": idx + 1,
@@ -350,10 +370,14 @@ class DemoSemanticSegmentationModel(BaseSegmentationModel):
             "version": "2.0.0",
             "environment_profile": image.environment.value,
             "supported_classes": [c.value for c in env_params.supported_classes],
+            "extended_taxonomy": [c.value for c in MARS_TARGET_TAXONOMY],
+            "unsupported_extended_classes": [c.value for c in EXTENDED_PLANNED_CLASSES],
             "input_resolution": f"{w}x{h}",
             "limitations": (
                 "Algorithmic optical baseline. Evaluates multi-band chromaticity and spatial gradient texture. "
-                "Does not use trained deep-learning neural network weights. Pluggable via BaseSegmentationModel."
+                "Classifies ROCK, BOULDER, SAND, SOIL, and UNKNOWN. Does not distinguish REGOLITH, BEDROCK, "
+                "DUST, or CRATER without 3D DEM elevation or trained deep-learning neural network weights (e.g. AI4Mars). "
+                "Pluggable via BaseSegmentationModel."
             ),
         }
 
