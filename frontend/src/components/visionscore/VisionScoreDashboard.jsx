@@ -581,3 +581,4 @@ export default function VisionScoreDashboard() {
     </div>
   );
 }
+

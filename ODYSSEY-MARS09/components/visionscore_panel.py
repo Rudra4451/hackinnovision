@@ -129,3 +129,4 @@ def render_visionscore_panel() -> None:
                 if col_v2.button("Mark False Positive", key=f"btn_fp_{al.event_id}"):
                     detector.verify_alert(al.event_id, "FALSE_POSITIVE")
                     st.rerun()
+

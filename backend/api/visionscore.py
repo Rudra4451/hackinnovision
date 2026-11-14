@@ -251,3 +251,4 @@ def evaluate_path_safety(payload: PathEvaluationPayload) -> Dict[str, Any]:
         visual_alerts=active_alerts,
     )
     return result
+

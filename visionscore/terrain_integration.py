@@ -229,3 +229,4 @@ def evaluate_candidate_path_safety(
         "active_visual_alerts_count": unmapped_visual_count,
         "explanation": explanation,
     }
+

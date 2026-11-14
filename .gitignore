@@ -16,5 +16,6 @@ node_modules/
 dist/
 .vite/
 outputs/obstacle_alerts/
+outputs/visionscore/alerts/
 
 

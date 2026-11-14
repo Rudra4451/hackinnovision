@@ -426,3 +426,4 @@ def segment_terrain(
         unified_img = handler.ingest(image, environment=env_enum)
 
     return active_model.segment(unified_img, active_config)
+
