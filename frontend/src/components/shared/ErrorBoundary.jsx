@@ -12,7 +12,7 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    console.error('[MARS-09] Component boundary caught error:', error, errorInfo);
+    console.error('[ARES] Component boundary caught error:', error, errorInfo);
   }
 
   render() {

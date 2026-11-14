@@ -40,7 +40,7 @@ export function buildRoverMarkerTrace(roverPos, elevation, options = {}) {
   return {
     type: 'scatter3d',
     mode: 'markers+text',
-    name: 'MARS-09 Rover',
+    name: 'ARES Rover',
     x: [col],
     y: [row],
     z: [displayZ],
@@ -61,6 +61,6 @@ export function buildRoverMarkerTrace(roverPos, elevation, options = {}) {
       color: '#06B6D4',
     },
     hoverinfo: 'text',
-    hovertext: `MARS-09 ROVER POSITION<br>Row: ${row}, Col: ${col}<br>Terrain Elevation: ${baseZ.toFixed(1)} m`,
+    hovertext: `ARES ROVER POSITION<br>Row: ${row}, Col: ${col}<br>Terrain Elevation: ${baseZ.toFixed(1)} m`,
   };
 }

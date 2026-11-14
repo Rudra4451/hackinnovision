@@ -4,7 +4,7 @@ import { BatteryCharging, Compass, Radio, Sun, Thermometer, ShieldCheck, Cpu } f
 export default function MissionOverview({ telemetry, activeTarget }) {
   const t = telemetry || {
     sol: 142,
-    rover_name: 'MARS-09 Odyssey',
+    rover_name: 'ARES',
     rover_position: [2, 2],
     battery_level_pct: 94.2,
     solar_irradiance_w_m2: 582.4,
@@ -21,8 +21,8 @@ export default function MissionOverview({ telemetry, activeTarget }) {
   return (
     <header className="mission-header">
       <div className="mission-brand">
-        <div className="mission-logo">
-          <Cpu size={24} color="#fff" />
+        <div className="mission-logo" style={{ display: 'flex', alignItems: 'center' }}>
+          <img src="/image_57d289.png" alt="ARES Logo" style={{ height: '32px', width: 'auto', objectFit: 'contain' }} />
         </div>
         <div>
           <h1 className="mission-title">{t.rover_name}</h1>

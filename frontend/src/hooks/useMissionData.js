@@ -77,7 +77,7 @@ export function useMissionData(start = [2, 2], goal = [45, 45]) {
       });
       setNavigation(data.navigation);
     } catch (err) {
-      console.error('[MARS-09] Mission data fetch failed:', err);
+      console.error('[ARES] Mission data fetch failed:', err);
       setError({
         type: 'BACKEND_OFFLINE',
         title: 'Mission Control Telemetry Offline',

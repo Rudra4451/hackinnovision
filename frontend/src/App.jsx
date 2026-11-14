@@ -315,8 +315,12 @@ export default function App() {
       <header className="mc-top-bar">
         {/* Left: Branding & System State */}
         <div className="mc-brand-area">
-          <Radio size={15} color="var(--rover)" />
-          <div className="mc-title">MARS-09 // ODYSSEY RECON</div>
+          <img
+            src="/image_57d289.png"
+            alt="ARES Logo"
+            style={{ height: '26px', width: 'auto', objectFit: 'contain' }}
+          />
+          <div className="mc-title">ARES</div>
           <span
             style={{
               fontSize: '9px',

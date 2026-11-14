@@ -150,7 +150,7 @@ export default function NavigationMap({
         color: '#00e676',
         line: { color: '#ffffff', width: 2 },
       },
-      name: 'MARS-09 Rover',
+      name: 'ARES Rover',
       hoverinfo: 'text',
       hovertext: `Rover Chassis at [${activeRoverPos[0]}, ${activeRoverPos[1]}]`,
     });
