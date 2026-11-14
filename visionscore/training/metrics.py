@@ -81,3 +81,4 @@ class SegmentationMetrics:
             return self.confusion_matrix.copy()
         row_sums = self.confusion_matrix.sum(axis=1, keepdims=True)
         return np.where(row_sums > 0, self.confusion_matrix / row_sums, 0.0)
+

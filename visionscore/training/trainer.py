@@ -242,3 +242,4 @@ class MarsTrainer:
         print(f"Avg Inference Latency: {avg_latency_ms:.2f} ms")
 
         return metrics_report
+
